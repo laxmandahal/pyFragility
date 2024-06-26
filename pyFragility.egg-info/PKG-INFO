@@ -2,12 +2,14 @@ Metadata-Version: 2.1
 Name: pyFragility
 Version: 0.0.1
 Summary: A package to fit fragility functions.
+Home-page: https://github.com/laxmandahal/pyFragility
 Author: Laxman Dahal
 Author-email: <laxman.dahal@ucla.com>
+License: BSD 4-Clause License
 Keywords: python,fragility,fitting,function,collaps risk,qmle,mle
 Platform: any
 Classifier: Development Status :: 4 - Beta
-Classifier: Intended Audience :: Scientific/Engineering
+Classifier: Intended Audience :: Education
 Classifier: Programming Language :: Python :: 3.8
 Classifier: Programming Language :: Python :: 3.9
 Classifier: Programming Language :: Python :: 3.10
