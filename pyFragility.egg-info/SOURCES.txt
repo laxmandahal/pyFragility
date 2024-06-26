@@ -1,0 +1,16 @@
+LICENSE
+README.md
+pyproject.toml
+setup.py
+examples/__init__.py
+examples/collapse_fragility_fit.py
+pyFragility/GLMClass.py
+pyFragility/MLEClass.py
+pyFragility/__init__.py
+pyFragility.egg-info/PKG-INFO
+pyFragility.egg-info/SOURCES.txt
+pyFragility.egg-info/dependency_links.txt
+pyFragility.egg-info/requires.txt
+pyFragility.egg-info/top_level.txt
+tests/__init__.py
+tests/test_pyFragility.py
