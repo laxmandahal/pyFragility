@@ -1,13 +1,11 @@
 version: 2
+# GitHub Actions only. Python dependencies are deliberately NOT managed here: Dependabot would
+# raise the lower bounds in pyproject.toml to the newest release, which for a library excludes
+# users on older environments. Compatibility with newer releases is checked by
+# .github/workflows/nightly.yml; lower bounds are checked by the "lowest supported dependencies"
+# job and guarded by tests/test_package.py.
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
-  - package-ecosystem: pip
-    directory: /
-    schedule:
-      interval: monthly
-    groups:
-      dev-dependencies:
-        patterns: ["*"]

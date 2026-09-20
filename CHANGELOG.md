@@ -35,6 +35,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
 - **License changed from BSD 4-Clause to BSD 3-Clause.**
 
 ### Fixed
+- Restored the dependency lower bounds (`numpy>=1.26`, `scipy>=1.11`, `pandas>=2.1`,
+  `statsmodels>=0.14`, `matplotlib>=3.8`). A Dependabot pull request had raised every lower bound to
+  the newest release, which would have excluded most users and emptied the "lowest supported
+  dependencies" CI job. Dependabot no longer manages Python dependencies.
+- Convergence detection no longer depends on the platform's finite-difference noise floor (the
+  beta-binomial fit was reported as non-converged on Windows and with old dependencies).
 - Convergence detection no longer depends on the platform's finite-difference noise floor (the
   beta-binomial fit was reported as non-converged on Windows and with old dependencies).
 

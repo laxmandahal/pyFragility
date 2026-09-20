@@ -135,3 +135,34 @@ def test_runtime_does_not_import_dev_only_dependencies():
         [sys.executable, "-W", "ignore", "-c", code], capture_output=True, text=True
     )
     assert result.returncode == 0, f"runtime imports dev-only packages: {result.stderr}"
+
+
+def test_dependency_floors_are_not_raised_by_accident():
+    """The lower bounds are what CI's 'lowest supported dependencies' job verifies. Bots and
+    hurried edits tend to raise them to the newest release, silently excluding users on older
+    environments; raising one must be a deliberate decision (update this test and the changelog)."""
+    import tomllib
+    from pathlib import Path
+
+    from packaging.requirements import Requirement
+    from packaging.version import Version
+
+    highest_allowed_floor = {
+        "numpy": "1.26",
+        "scipy": "1.11",
+        "pandas": "2.1",
+        "statsmodels": "0.14",
+        "matplotlib": "3.8",
+    }
+    project = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())["project"]
+    declared = {}
+    for text in project["dependencies"]:
+        req = Requirement(text)
+        floors = [Version(s.version) for s in req.specifier if s.operator in (">=", "==", "~=")]
+        declared[req.name] = max(floors) if floors else None
+    for name, allowed in highest_allowed_floor.items():
+        assert declared[name] is not None, f"{name} has no lower bound"
+        assert declared[name] <= Version(allowed), (
+            f"{name}>={declared[name]} raises the supported minimum above {allowed}"
+        )
+    assert set(declared) == set(highest_allowed_floor), "runtime dependencies changed"
