@@ -22,7 +22,7 @@ each to collapse risk, is the approach of the paper above.
 | Published / expert median and dispersion | `LognormalFragility` | direct |
 
 ## Installation
-Requires Python >= 3.10.
+Requires Python >= 3.11.
 ```bash
 pip install pyFragility
 ```
