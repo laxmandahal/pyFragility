@@ -1,7 +1,0 @@
-scipy
-matplotlib
-numpy
-statsmodels
-sympy
-numdifftools
-pandas
