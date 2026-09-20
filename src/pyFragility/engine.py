@@ -179,6 +179,11 @@ def _newton(lik: Likelihood, params: NDArray, max_iter: int = 60) -> tuple[NDArr
                 return params, False
         except np.linalg.LinAlgError:
             return params, False
+        # Newton decrement: the log-likelihood gain still available. Scale-free, and robust to
+        # the finite-difference noise floor (~1e-9 relative) of numerically differentiated models.
+        # A flat likelihood (e.g. complete separation) also has a tiny decrement, but there the
+        # Newton step is huge, so the step itself must be small too.
+        done = float(s @ step) < 1e-9 and np.max(np.abs(step) / (1.0 + np.abs(params))) < 1e-4
         t = 1.0
         while t > 1e-6:
             cand = params + t * step
@@ -191,7 +196,7 @@ def _newton(lik: Likelihood, params: NDArray, max_iter: int = 60) -> tuple[NDArr
             return params, False
         moved = np.max(np.abs(t * step) / (1.0 + np.abs(params)))
         params, f = cand, fc
-        if moved < 1e-10:
+        if done or moved < 1e-8:  # `done`: one last (tiny) Newton step, then stop
             return params, True
     return params, False
 

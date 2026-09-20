@@ -1,0 +1,48 @@
+name: Release
+
+# Publishes to PyPI when a version tag is pushed (e.g. `git tag v0.3.0 && git push --tags`).
+# Requires a one-time PyPI "trusted publisher" setup for this repository and a GitHub
+# environment named "pypi"; see CONTRIBUTING.md. Until then this workflow fails at the
+# publish step, without side effects.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv venv --python 3.13 && uv pip install build twine ".[dev]"
+      - name: Tests
+        run: uv run --no-sync pytest -m "not notebooks"
+        env:
+          MPLBACKEND: Agg
+      - name: Tag matches the package version
+        run: |
+          version=$(uv run --no-sync python -c "import pyFragility; print(pyFragility.__version__)")
+          test "v${version}" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != v${version}"; exit 1; }
+      - run: uv run --no-sync python -m build
+      - run: uv run --no-sync twine check --strict dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write  # trusted publishing; no API token is stored
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

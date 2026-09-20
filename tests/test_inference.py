@@ -68,6 +68,7 @@ def test_sandwich_differs_from_mle_only_when_misspecified():
     assert np.all(r_bad > 1.5)  # overdispersion inflates true variability; MLE SEs are too small
 
 
+@pytest.mark.slow
 def test_bootstrap_kinds_track_the_right_covariance():
     fit = fit_binomial(*_overdispersed(2, m=80), link="logit", parametrization="glm")
     mle, sandwich = fit.std_errors("mle"), fit.std_errors("sandwich")
@@ -156,6 +157,7 @@ def test_likelihood_ratio_test_for_overdispersion():
         likelihood_ratio_test(beta_bin, binom)
 
 
+@pytest.mark.slow
 def test_posterior_flat_prior_matches_mle_and_prior_pulls_estimate():
     rng = np.random.default_rng(4)
     fit = fit_ida(np.exp(np.log(1.5) + 0.4 * rng.standard_normal(200)))

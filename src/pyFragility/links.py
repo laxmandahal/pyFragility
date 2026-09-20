@@ -111,6 +111,7 @@ LINKS: dict[str, Link] = {"probit": Probit(), "logit": Logit(), "cloglog": Clogl
 
 
 def get_link(link: str | Link) -> Link:
+    """Return a :class:`Link` from its name (probit, logit, cloglog) or pass one through."""
     if isinstance(link, Link):
         return link
     try:

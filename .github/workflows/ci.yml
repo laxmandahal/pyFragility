@@ -5,16 +5,88 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  MPLBACKEND: Agg
+
 jobs:
-  test:
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.13"]
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
-      - run: uv python install ${{ matrix.python-version }}
-      - run: uv venv --python ${{ matrix.python-version }} && uv pip install -e ".[dev]"
+      - uses: astral-sh/setup-uv@v6
+      - run: uv venv --python 3.13 && uv pip install ruff
       - run: uv run --no-sync ruff check .
-      - run: uv run --no-sync pytest
+      - run: uv run --no-sync ruff format --check .
+
+  test:
+    name: Test (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+        include:
+          - os: macos-latest
+            python-version: "3.13"
+          - os: windows-latest
+            python-version: "3.13"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv venv --python ${{ matrix.python-version }}
+      - run: uv pip install -e ".[dev]"
+      # coverage is measured (and enforced) on one leg only
+      - name: Tests with coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
+        run: uv run --no-sync pytest -m "not notebooks" --cov --cov-report=term-missing --cov-report=xml
+      - name: Tests
+        if: ${{ !(matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13') }}
+        run: uv run --no-sync pytest -m "not notebooks"
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
+        with:
+          name: coverage-xml
+          path: coverage.xml
+
+  lowest-dependencies:
+    name: Test (lowest supported dependencies)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv venv --python 3.11
+      - run: uv pip install --resolution lowest-direct -e ".[dev]"
+      - run: uv run --no-sync pytest -m "not notebooks"
+
+  notebooks:
+    name: Example notebooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv venv --python 3.13 && uv pip install -e ".[dev,examples]"
+      - run: uv run --no-sync pytest -m notebooks
+
+  build:
+    name: Build and install the distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv venv --python 3.13 && uv pip install build twine
+      - run: uv run --no-sync python -m build
+      - run: uv run --no-sync twine check --strict dist/*
+      - name: Install the wheel in a clean environment and import it
+        run: |
+          uv venv --python 3.11 /tmp/clean
+          uv pip install --python /tmp/clean/bin/python dist/*.whl
+          /tmp/clean/bin/python -c "import pyFragility as pf; print(pf.__version__)"

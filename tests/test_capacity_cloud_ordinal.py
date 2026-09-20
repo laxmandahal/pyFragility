@@ -90,6 +90,7 @@ def test_cloud_matches_ols_and_curve_formula():
         fit_cloud(im, edp).probability(x)
 
 
+@pytest.mark.slow
 def test_modified_cloud_with_collapses():
     rng = np.random.default_rng(6)
     n = 2000
@@ -140,6 +141,7 @@ def test_ordinal_matches_statsmodels(link):
     assert grouped.loglik - coef == pytest.approx(fit.loglik, rel=1e-9)
 
 
+@pytest.mark.slow
 def test_ordinal_curves_never_cross_and_states_sum_to_one():
     x, y = _ordinal_data()
     fit = fit_damage_states(x, y)

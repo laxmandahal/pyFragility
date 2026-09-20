@@ -1,0 +1,28 @@
+name: Nightly (latest and pre-release dependencies)
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  MPLBACKEND: Agg
+
+jobs:
+  upstream:
+    name: Test against the newest dependencies
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        prerelease: [disallow, allow]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv venv --python 3.13
+      - run: uv pip install --upgrade --prerelease=${{ matrix.prerelease }} -e ".[dev,examples]"
+      - run: uv pip list
+      - run: uv run --no-sync pytest
