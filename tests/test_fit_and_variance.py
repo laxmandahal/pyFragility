@@ -1,8 +1,10 @@
 import numpy as np
 import pytest
 
-from pyFragility import covariance_estimates, fit_mle, fit_probit_glm
+from pyFragility.glm import fit_probit_glm
 from pyFragility.likelihood import hessian, score, score_by_level
+from pyFragility.mle import fit_mle
+from pyFragility.variance import covariance_estimates
 
 NAMES = ["B1-Existing", "B1-Retrofit", "B2-Existing", "B2-Retrofit", "B3-Existing", "B3-Retrofit"]
 

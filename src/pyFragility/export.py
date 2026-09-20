@@ -12,7 +12,7 @@ from pyFragility.engine import FragilityFit
 
 
 def fragility_table(
-    fits: Mapping[str, FragilityFit], kind: str = "sandwich", **kwargs
+    fits: Mapping[str, FragilityFit], cov: str = "sandwich", **kwargs
 ) -> pd.DataFrame:
     """Median and log-standard deviation (with standard errors) of lognormal-form fits.
 
@@ -21,7 +21,7 @@ def fragility_table(
     """
     rows = []
     for name, fit in fits.items():
-        s = fit.lognormal_parameters(kind, **kwargs)
+        s = fit.lognormal_parameters(cov, **kwargs)
         rows.append(
             {
                 "ID": name,
@@ -31,15 +31,21 @@ def fragility_table(
                 "se_Theta_0": float(np.sqrt(s.cov[0, 0])),
                 "se_Theta_1": float(np.sqrt(s.cov[1, 1])),
                 "corr": float(s.cov[0, 1] / np.sqrt(s.cov[0, 0] * s.cov[1, 1])),
-                "covariance": kind,
+                "covariance": cov,
                 "n_obs": fit.n_obs,
             }
         )
     return pd.DataFrame(rows).set_index("ID")
 
 
-def fragility_json(fits: Mapping[str, FragilityFit], kind: str = "sandwich", **kwargs) -> str:
+def fragility_json(fits: Mapping[str, FragilityFit], cov: str = "sandwich", **kwargs) -> str:
     """:func:`fragility_table` as a JSON string."""
     return json.dumps(
-        fragility_table(fits, kind, **kwargs).reset_index().to_dict("records"), indent=2
+        fragility_table(fits, cov, **kwargs).reset_index().to_dict("records"), indent=2
     )
+
+
+__all__ = [
+    "fragility_json",
+    "fragility_table",
+]

@@ -21,9 +21,11 @@ from scipy import special
 from scipy.optimize import minimize
 from scipy.stats import norm
 
-from pyFragility import numdiff
+from pyFragility import _numdiff as numdiff
 from pyFragility.fragility import LognormalFragility
 from pyFragility.variance import CovarianceEstimates
+
+COVARIANCE_KINDS = ("mle", "expected", "sandwich")
 
 
 class Likelihood(ABC):
@@ -78,6 +80,10 @@ class Likelihood(ABC):
 
     def resample(self, rng: np.random.Generator, params: NDArray, kind: str) -> Likelihood:
         raise NotImplementedError(f"{self.model_name} does not support bootstrap resampling")
+
+    def expected_information(self, params: NDArray) -> NDArray:
+        """Fisher (expected) information matrix, positive definite, shape ``(p, p)``."""
+        raise NotImplementedError(f"{self.model_name} has no closed-form expected information")
 
     def saturated_loglik(self) -> float | None:
         return None
@@ -151,9 +157,16 @@ def compute_covariances(
     a_inv = np.linalg.inv(-a)
     sandwich = a_inv @ b @ a_inv
     if small_sample:
-        n, p = lik.n_obs, lik.n_params
-        sandwich = sandwich * groups / (groups - 1) * (n - 1) / max(n - p, 1)
+        sandwich = sandwich * _small_sample_factor(lik, groups)
     return CovarianceEstimates(a, b, a_inv, sandwich)
+
+
+def _small_sample_factor(lik: Likelihood, groups: int | None = None) -> float:
+    """``G/(G-1) * (N-1)/(N-p)``, the usual finite-sample correction of the sandwich."""
+    if groups is None:
+        groups = np.unique(lik.cluster).size if lik.cluster is not None else lik.n_obs
+    n, p = lik.n_obs, lik.n_params
+    return groups / (groups - 1) * (n - 1) / max(n - p, 1)
 
 
 def _starts(inverse: NDArray) -> NDArray:
@@ -298,16 +311,30 @@ class FragilityFit:
             )
         return self._cache[key]
 
-    def covariance(self, kind: str = "sandwich", small_sample: bool = False) -> NDArray:
-        est = self.covariance_estimates(small_sample)
-        if kind == "mle":
-            return est.mle_cov
-        if kind == "sandwich":
-            return est.sandwich_cov
-        raise ValueError("kind must be 'mle' or 'sandwich'")
+    def covariance(self, cov: str = "sandwich", small_sample: bool = False) -> NDArray:
+        """Parameter covariance matrix.
 
-    def std_errors(self, kind: str = "sandwich") -> NDArray:
-        return np.sqrt(np.diag(self.covariance(kind)))
+        ``cov`` is one of
+
+        * ``"mle"``: inverse *observed* information, assuming the model is correct;
+        * ``"expected"``: inverse *expected* (Fisher) information, as R's ``glm`` reports
+          (binomial GLMs and the lognormal MSA fit only);
+        * ``"sandwich"``: Huber-White ``A^-1 B A^-1`` with the observed Hessian, robust to
+          misspecification (and to clustering if ``cluster`` ids were given). This equals
+          statsmodels' ``cov_type="HC0"``.
+        """
+        if cov not in COVARIANCE_KINDS:
+            raise ValueError(f"cov must be one of {COVARIANCE_KINDS}, not {cov!r}")
+        est = self.covariance_estimates(small_sample)
+        if cov == "mle":
+            return est.mle_cov
+        if cov == "sandwich":
+            return est.sandwich_cov
+        return np.linalg.inv(self.likelihood.expected_information(self.params))
+
+    def std_errors(self, cov: str = "sandwich") -> NDArray:
+        """Standard errors of the parameters for the covariance ``cov`` (see :meth:`covariance`)."""
+        return np.sqrt(np.diag(self.covariance(cov)))
 
     def summary(self) -> pd.DataFrame:
         """Estimates with MLE and sandwich standard errors."""
@@ -338,39 +365,39 @@ class FragilityFit:
         return -2 * self.loglik + 2 * float(np.trace(est.mle_cov @ est.outer_product))
 
     # -- derived quantities and uncertainty bands -------------------------------------------
-    def derived(self, func, kind: str = "sandwich") -> tuple[float, float]:
+    def derived(self, func, cov: str = "sandwich") -> tuple[float, float]:
         """Value and delta-method standard error of a scalar function of the parameters."""
         grad = numdiff.jacobian(lambda p: np.atleast_1d(func(p)), self.params).reshape(-1)
-        return float(func(self.params)), float(np.sqrt(grad @ self.covariance(kind) @ grad))
+        return float(func(self.params)), float(np.sqrt(grad @ self.covariance(cov) @ grad))
 
-    def lognormal_parameters(self, kind: str = "sandwich", **kwargs: Any) -> LognormalSummary:
+    def lognormal_parameters(self, cov: str = "sandwich", **kwargs: Any) -> LognormalSummary:
         """Median ``theta`` and log-standard deviation ``beta`` with their covariance."""
         lik = self.likelihood
         vec = lik.lognormal_transform(self.params, **kwargs)
         jac = numdiff.jacobian(lambda p: lik.lognormal_transform(p, **kwargs), self.params)
-        cov = jac @ self.covariance(kind) @ jac.T
-        return LognormalSummary(float(vec[0]), float(vec[1]), cov)
+        matrix = jac @ self.covariance(cov) @ jac.T
+        return LognormalSummary(float(vec[0]), float(vec[1]), matrix)
 
     def confidence_band(
-        self, im: ArrayLike, level: float = 0.95, kind: str = "sandwich", **kwargs: Any
+        self, im: ArrayLike, level: float = 0.95, cov: str = "sandwich", **kwargs: Any
     ) -> tuple[NDArray, NDArray]:
         """Pointwise confidence band on the fragility curve (delta method on the link scale)."""
         lik = self.likelihood
         eta = lik.curve_eta(self.params, im, **kwargs)
         jac = numdiff.jacobian(lambda p: lik.curve_eta(p, im, **kwargs), self.params)
-        se = np.sqrt(np.einsum("ij,jk,ik->i", jac, self.covariance(kind), jac))
+        se = np.sqrt(np.einsum("ij,jk,ik->i", jac, self.covariance(cov), jac))
         z = norm.ppf(0.5 + level / 2)
         return lik.link_inverse(eta - z * se), lik.link_inverse(eta + z * se)
 
     def simulate_params(
-        self, n: int = 1000, kind: str = "sandwich", seed: int | None = 0
+        self, n: int = 1000, cov: str = "sandwich", seed: int | None = 0
     ) -> NDArray:
         """Parameter draws from the asymptotic normal distribution (invalid draws dropped)."""
         rng = np.random.default_rng(seed)
-        cov = self.covariance(kind)
+        matrix = self.covariance(cov)
         out: list[NDArray] = []
         for _ in range(50):
-            draws = rng.multivariate_normal(self.params, cov, size=2 * n)
+            draws = rng.multivariate_normal(self.params, matrix, size=2 * n)
             out.extend(d for d in draws if self.likelihood.is_valid(d))
             if len(out) >= n:
                 return np.array(out[:n])
@@ -387,10 +414,11 @@ class FragilityFit:
 
         return goodness_of_fit(self)
 
-    def bootstrap(self, n_boot: int = 500, kind: str = "nonparametric", seed: int | None = 0):
+    def bootstrap(self, n_boot: int = 500, resample: str = "nonparametric", seed: int | None = 0):
+        """Bootstrap refits; see :func:`pyFragility.inference.bootstrap`."""
         from pyFragility.inference import bootstrap
 
-        return bootstrap(self, n_boot=n_boot, kind=kind, seed=seed)
+        return bootstrap(self, n_boot=n_boot, resample=resample, seed=seed)
 
     def profile_interval(self, param: str | int, level: float = 0.95):
         from pyFragility.inference import profile_likelihood_interval
@@ -401,3 +429,14 @@ class FragilityFit:
         from pyFragility.bayes import sample_posterior
 
         return sample_posterior(self, **kwargs)
+
+
+__all__ = [
+    "COVARIANCE_KINDS",
+    "FragilityFit",
+    "Likelihood",
+    "LognormalSummary",
+    "compute_covariances",
+    "fit_likelihood",
+    "resample_indices",
+]

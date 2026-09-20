@@ -12,8 +12,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
   threshold (90%); warnings are errors in tests.
 - `CONTRIBUTING.md`, PR and issue templates, Dependabot, pre-commit.
 
+- Covariance choice `cov="mle" | "expected" | "sandwich"` everywhere (`fit.covariance`,
+  `confidence_band`, `frequency_uncertainty`, `plot_fit`, `fragility_table`, ...). `"expected"` is
+  the inverse Fisher information, i.e. what R's `glm` reports, so R-matching results are available
+  from the new API.
+- `frequency_uncertainty(method="simulation" | "delta" | "paper")`; `"paper"` reproduces the paper's
+  Eq. 12. `mean_annual_frequency` and `probability_in_period` work for any fit.
+- `fit_damage_states_independent` for per-state (possibly crossing) fits.
+- Every public module declares `__all__`; tests fail if a public name is undeclared, undocumented
+  or removed without updating the API snapshot.
+
 ### Changed
+- **API review.** The top level now holds only the everyday workflow (26 names); the rest lives in
+  submodules (`pyFragility.inference`, `.bayes`, `.risk`, `.binomial`, ...). Because 0.2.0 was not
+  yet published, no deprecation period was needed for these moves.
+- Parameter names: `cov=` selects the parameter covariance (previously `kind=`);
+  `bootstrap(resample=...)` selects the resampling scheme; `fit_msa(im, num_exceed, num_gm)` and
+  `fit_binomial(im, num_exceed, num_total)` are not specific to collapse.
+- `fit_damage_states` always returns a `FragilityFit`; the independent per-state fit moved to
+  `fit_damage_states_independent` (the return type no longer depends on a flag).
 - The package version is defined once, in `pyFragility.__version__`.
+- **License changed from BSD 4-Clause to BSD 3-Clause.**
+
+### Fixed
+- Convergence detection no longer depends on the platform's finite-difference noise floor (the
+  beta-binomial fit was reported as non-converged on Windows and with old dependencies).
+
+### Notes
+- The paper-era "expectedHessian" option (statsmodels `cov_type="hc0", optim_hessian="eim"`) was
+  identical to the observed-Hessian sandwich; `optim_hessian` only affects the optimiser. It is
+  covered by `cov="sandwich"`.
 
 ## [0.2.0] - 2026-09-20
 ### Added

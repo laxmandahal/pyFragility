@@ -9,8 +9,8 @@ from pyFragility import (
     fit_msa,
     independent_priors,
     likelihood_ratio_test,
-    sample_posterior,
 )
+from pyFragility.bayes import sample_posterior
 from pyFragility.inference import _im_statistic
 
 
@@ -74,17 +74,17 @@ def test_bootstrap_kinds_track_the_right_covariance():
     mle, sandwich = fit.std_errors("mle"), fit.std_errors("sandwich")
     assert np.all(sandwich > 1.3 * mle)  # overdispersion: model-based SEs are too small
     for kind in ("parametric", "nonparametric"):  # both hold the stripes fixed
-        b = fit.bootstrap(300, kind=kind)
+        b = fit.bootstrap(300, resample=kind)
         assert b.n_failed < 50
         np.testing.assert_allclose(b.std_errors(), mle, rtol=0.3)
-    pairs = fit.bootstrap(300, kind="pairs")
+    pairs = fit.bootstrap(300, resample="pairs")
     np.testing.assert_allclose(pairs.std_errors(), sandwich, rtol=0.3)  # scatter between stripes
     iv = pairs.interval(0.9)
     assert np.all(iv["lower"] < fit.params) and np.all(fit.params < iv["upper"])
     lo, hi = pairs.curve_band(np.linspace(0.5, 2, 10))
     assert np.all(lo < hi)
     with pytest.raises(ValueError, match="kind"):
-        fit.bootstrap(5, kind="bogus")
+        fit.bootstrap(5, resample="bogus")
 
 
 def test_bootstrap_of_clustered_data_resamples_clusters():

@@ -187,8 +187,9 @@ class DamageStateFits:
     def probability(self, im: ArrayLike, state: int = 1) -> NDArray:
         return self.fits[state - 1].probability(im)
 
-    def confidence_band(self, im, level=0.95, kind="sandwich", state=1):
-        return self.fits[state - 1].confidence_band(im, level, kind)
+    def confidence_band(self, im, level=0.95, cov="sandwich", state=1):
+        """Confidence band of the curve for damage state ``state``."""
+        return self.fits[state - 1].confidence_band(im, level, cov)
 
     def summary(self):
         import pandas as pd
@@ -217,30 +218,56 @@ def fit_damage_states(
     counts: ArrayLike | None = None,
     n_states: int | None = None,
     link: str | Link = "probit",
-    parallel: bool = True,
     cluster: ArrayLike | None = None,
     **kwargs: Any,
-) -> FragilityFit | DamageStateFits:
-    """Fit fragility curves for several ordered damage states at once.
+) -> FragilityFit:
+    """Fit the fragility curves of several ordered damage states jointly.
 
     Provide either ``damage_state`` (observed state ``0..K`` per structure) or ``counts``
-    (``(rows, K + 1)`` counts per state at each intensity).
-
-    With ``parallel=True`` (default) a cumulative-link model with a shared slope is fitted:
-    the curves ``P(DS >= j | im)`` cannot cross. With ``parallel=False`` each state is fitted
-    independently (the traditional approach), which allows differing dispersions but may yield
-    crossing curves; a :class:`DamageStateFits` is returned.
+    (``(rows, K + 1)`` counts per state at each intensity). A cumulative-link model with a shared
+    slope is fitted, so the curves ``P(DS >= j | im)`` never cross; evaluate them with
+    ``fit.probability(im, state=j)``. To let each state have its own dispersion (possibly with
+    crossing curves) use :func:`fit_damage_states_independent`.
     """
-    if (damage_state is None) == (counts is None):
-        raise ValueError("provide exactly one of damage_state or counts")
-    counts_arr = (
-        _counts_from_states(damage_state, n_states) if counts is None else np.asarray(counts, float)
-    )
-    if parallel:
-        return fit_likelihood(OrdinalGLM(im, counts_arr, link=link, cluster=cluster, **kwargs))
+    counts_arr = _resolve_counts(damage_state, counts, n_states)
+    return fit_likelihood(OrdinalGLM(im, counts_arr, link=link, cluster=cluster, **kwargs))
+
+
+def fit_damage_states_independent(
+    im: ArrayLike,
+    damage_state: ArrayLike | None = None,
+    *,
+    counts: ArrayLike | None = None,
+    n_states: int | None = None,
+    link: str | Link = "probit",
+    cluster: ArrayLike | None = None,
+    **kwargs: Any,
+) -> DamageStateFits:
+    """Fit each damage state's curve ``P(DS >= j | im)`` separately (the traditional approach).
+
+    Every state gets its own parameters, so dispersions may differ, but the curves can cross.
+    Takes the same data as :func:`fit_damage_states`.
+    """
+    counts_arr = _resolve_counts(damage_state, counts, n_states)
     total = counts_arr.sum(axis=1)
     fits = [
         fit_binomial(im, counts_arr[:, j:].sum(axis=1), total, link=link, cluster=cluster, **kwargs)
         for j in range(1, counts_arr.shape[1])
     ]
     return DamageStateFits(fits)
+
+
+def _resolve_counts(damage_state, counts, n_states) -> NDArray:
+    if (damage_state is None) == (counts is None):
+        raise ValueError("provide exactly one of damage_state or counts")
+    if counts is None:
+        return _counts_from_states(damage_state, n_states)
+    return np.asarray(counts, dtype=float)
+
+
+__all__ = [
+    "DamageStateFits",
+    "OrdinalGLM",
+    "fit_damage_states",
+    "fit_damage_states_independent",
+]

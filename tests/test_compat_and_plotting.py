@@ -9,13 +9,11 @@ import pytest  # noqa: E402
 from pyFragility import (  # noqa: E402
     GLMProbitClass,
     MaximumLikelihoodMethod,
-    fit_mle,
-    plot_confidence_band,
-    plot_fragility,
-    plot_parameter_distribution,
 )
 from pyFragility.fragility import LognormalFragility  # noqa: E402
 from pyFragility.glm import fit_probit_glm  # noqa: E402
+from pyFragility.mle import fit_mle
+from pyFragility.plotting import plot_confidence_band, plot_fragility, plot_parameter_distribution
 
 
 def test_legacy_mle_interface(b2, golden):

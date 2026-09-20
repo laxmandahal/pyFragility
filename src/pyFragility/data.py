@@ -84,3 +84,8 @@ class CollapseData:
         if self.annual_rate is None:
             raise ValueError("annual_rate (or return periods) is required for collapse-risk output")
         return self.annual_rate
+
+
+__all__ = [
+    "CollapseData",
+]

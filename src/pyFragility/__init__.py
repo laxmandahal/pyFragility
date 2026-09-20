@@ -1,115 +1,83 @@
-"""pyFragility: collapse fragility fitting with MLE / QMLE (sandwich) uncertainty.
+"""pyFragility: fragility function fitting with misspecification-robust uncertainty.
+
+The names below are the everyday workflow. Everything else is reachable through the submodules
+(``pyFragility.inference``, ``pyFragility.bayes``, ``pyFragility.risk``, ``pyFragility.binomial``,
+``pyFragility.capacity``, ``pyFragility.cloud``, ``pyFragility.ordinal``, ``pyFragility.links``,
+``pyFragility.plotting``, ...).
 
 Reference: Dahal, L., Burton, H., & Onyambu, S. (2022). Quantifying the effect of probability
 model misspecification in seismic collapse risk assessment. Structural Safety, 96, 102185.
 """
 
-from pyFragility.bayes import PosteriorSamples, independent_priors, sample_posterior
-from pyFragility.binomial import (
-    BetaBinomialGLM,
-    BinomialGLM,
-    BinomialLognormal,
-    fit_binomial,
-    fit_field_data,
-    fit_msa,
+# Submodules are imported for their attributes (``pyFragility.inference`` etc.).
+from pyFragility import (  # noqa: F401
+    bayes,
+    binomial,
+    capacity,
+    cloud,
+    engine,
+    export,
+    glm,
+    inference,
+    likelihood,
+    links,
+    mle,
+    ordinal,
+    plotting,
+    risk,
+    variance,
 )
-from pyFragility.capacity import LognormalCapacity, fit_ida
-from pyFragility.cloud import CloudRegression, fit_cloud
+from pyFragility.bayes import independent_priors
+from pyFragility.binomial import fit_binomial, fit_field_data, fit_msa
+from pyFragility.capacity import fit_ida
+from pyFragility.cloud import fit_cloud
 from pyFragility.data import CollapseData
 from pyFragility.engine import FragilityFit, Likelihood, fit_likelihood
 from pyFragility.export import fragility_json, fragility_table
-from pyFragility.fragility import LognormalFragility, ProbitFragility
-from pyFragility.glm import ProbitGLMResult, fit_probit_glm
+from pyFragility.fragility import LognormalFragility
 
 # Deprecated 0.0.x interface, kept importable from the package root.
 from pyFragility.GLMClass import GLMProbitClass  # noqa: E402
-from pyFragility.inference import (
-    bootstrap,
-    compare_models,
-    goodness_of_fit,
-    information_matrix_test,
-    likelihood_ratio_test,
-    profile_likelihood_interval,
-)
-from pyFragility.links import LINKS, get_link
-from pyFragility.mle import MLEResult, fit_mle
+from pyFragility.inference import compare_models, likelihood_ratio_test
 from pyFragility.MLEClass import MaximumLikelihoodMethod  # noqa: E402
-from pyFragility.ordinal import DamageStateFits, OrdinalGLM, fit_damage_states
-from pyFragility.plotting import (
-    plot_confidence_band,
-    plot_fit,
-    plot_fragility,
-    plot_parameter_distribution,
-)
+from pyFragility.ordinal import fit_damage_states, fit_damage_states_independent
+from pyFragility.plotting import plot_fit
 from pyFragility.risk import (
-    CollapseRateSimulation,
-    FrequencyUncertainty,
     HazardCurve,
-    collapse_frequency_std,
     expected_annual_loss,
     frequency_uncertainty,
-    mean_annual_collapse_frequency,
-    probability_of_collapse_in_years,
-    simulate_collapse_rate,
+    mean_annual_frequency,
+    probability_in_period,
     vulnerability,
 )
-from pyFragility.variance import CovarianceEstimates, covariance_estimates
 
 __version__ = "0.2.0"
 
 __all__ = [
-    "BetaBinomialGLM",
-    "BinomialGLM",
-    "BinomialLognormal",
-    "bootstrap",
-    "CloudRegression",
-    "collapse_frequency_std",
     "CollapseData",
-    "CollapseRateSimulation",
+    "FragilityFit",
+    "GLMProbitClass",
+    "HazardCurve",
+    "Likelihood",
+    "LognormalFragility",
+    "MaximumLikelihoodMethod",
     "compare_models",
-    "covariance_estimates",
-    "CovarianceEstimates",
-    "DamageStateFits",
     "expected_annual_loss",
     "fit_binomial",
     "fit_cloud",
     "fit_damage_states",
+    "fit_damage_states_independent",
     "fit_field_data",
     "fit_ida",
     "fit_likelihood",
-    "fit_mle",
     "fit_msa",
-    "fit_probit_glm",
     "fragility_json",
     "fragility_table",
-    "FragilityFit",
     "frequency_uncertainty",
-    "FrequencyUncertainty",
-    "get_link",
-    "GLMProbitClass",
-    "goodness_of_fit",
-    "HazardCurve",
     "independent_priors",
-    "information_matrix_test",
-    "Likelihood",
     "likelihood_ratio_test",
-    "LINKS",
-    "LognormalCapacity",
-    "LognormalFragility",
-    "MaximumLikelihoodMethod",
-    "mean_annual_collapse_frequency",
-    "MLEResult",
-    "OrdinalGLM",
-    "plot_confidence_band",
+    "mean_annual_frequency",
     "plot_fit",
-    "plot_fragility",
-    "plot_parameter_distribution",
-    "PosteriorSamples",
-    "probability_of_collapse_in_years",
-    "ProbitFragility",
-    "ProbitGLMResult",
-    "profile_likelihood_interval",
-    "sample_posterior",
-    "simulate_collapse_rate",
+    "probability_in_period",
     "vulnerability",
 ]

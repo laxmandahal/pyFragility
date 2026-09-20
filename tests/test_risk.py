@@ -1,15 +1,15 @@
 import numpy as np
 import pytest
 
-from pyFragility import (
+from pyFragility.glm import fit_probit_glm
+from pyFragility.mle import fit_mle
+from pyFragility.risk import (
     collapse_frequency_std,
-    fit_mle,
-    fit_probit_glm,
+    default_im_grid,
     mean_annual_collapse_frequency,
     probability_of_collapse_in_years,
     simulate_collapse_rate,
 )
-from pyFragility.risk import default_im_grid
 
 
 @pytest.mark.parametrize("name", ["B1-Existing", "B2-Existing", "B3-Retrofit", "B4-Existing"])
@@ -65,7 +65,9 @@ def test_simulation_is_seeded_and_scales_with_uncertainty(b2):
 
 
 def test_requires_annual_rate():
-    from pyFragility import CollapseData
+    from pyFragility import (
+        CollapseData,
+    )
 
     d = CollapseData([1, 2, 3], [0, 1, 2], [2, 2, 2])
     with pytest.raises(ValueError, match="annual_rate"):

@@ -116,3 +116,9 @@ def fit_ida(
     and sandwich uncertainty.
     """
     return fit_likelihood(LognormalCapacity(capacity, censored, cluster=cluster))
+
+
+__all__ = [
+    "LognormalCapacity",
+    "fit_ida",
+]

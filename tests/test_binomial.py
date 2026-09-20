@@ -4,17 +4,16 @@ import statsmodels.api as sm
 from scipy.stats import betabinom
 
 from pyFragility import (
-    BetaBinomialGLM,
-    BinomialGLM,
-    covariance_estimates,
     fit_binomial,
     fit_field_data,
-    fit_mle,
     fit_msa,
-    get_link,
 )
-from pyFragility.numdiff import hessian as num_hessian
-from pyFragility.numdiff import jacobian as num_jacobian
+from pyFragility._numdiff import hessian as num_hessian
+from pyFragility._numdiff import jacobian as num_jacobian
+from pyFragility.binomial import BetaBinomialGLM, BinomialGLM
+from pyFragility.links import get_link
+from pyFragility.mle import fit_mle
+from pyFragility.variance import covariance_estimates
 
 
 def _sim(link="logit", m=25, n=30, seed=0, b=(-3.0, 2.2)):
@@ -157,9 +156,9 @@ def test_validation_and_confidence_band():
     im, k, n = _sim("probit")
     fit = fit_binomial(im, k, n, parametrization="glm")
     grid = np.linspace(0.3, 2.5, 20)
-    lo, hi = fit.confidence_band(grid, kind="mle")
+    lo, hi = fit.confidence_band(grid, cov="mle")
     assert np.all(lo < fit.probability(grid)) and np.all(fit.probability(grid) < hi)
-    lo2, hi2 = fit.confidence_band(grid, level=0.5, kind="mle")
+    lo2, hi2 = fit.confidence_band(grid, level=0.5, cov="mle")
     assert np.all(hi2 - lo2 < hi - lo)
     est, se = fit.derived(lambda p: np.exp(-p[0] / p[1]), "mle")
     assert est == pytest.approx(fit.lognormal_parameters("mle").theta)

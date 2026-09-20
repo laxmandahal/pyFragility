@@ -5,7 +5,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pyFragility import CollapseData
+from pyFragility import (
+    CollapseData,
+)
 
 DATA = Path(__file__).parent / "data"
 RETURN_PERIODS = [15, 25, 50, 75, 100, 150, 250, 500, 1000, 2500, 2700, 3000]

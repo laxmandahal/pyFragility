@@ -15,6 +15,7 @@ from numpy.typing import ArrayLike, NDArray
 from scipy.interpolate import CubicSpline
 from scipy.stats import norm
 
+from pyFragility import _numdiff
 from pyFragility.data import CollapseData
 from pyFragility.fragility import ProbitFragility
 
@@ -93,9 +94,12 @@ def collapse_frequency_std(
     return float(abs(np.sum(d_lam * sigma_p[:-1])))
 
 
-def probability_of_collapse_in_years(rate: ArrayLike, years: float) -> NDArray[np.float64]:
-    """``1 - exp(-years * rate)`` for a Poisson collapse process."""
+def probability_in_period(rate: ArrayLike, years: float) -> NDArray[np.float64]:
+    """Probability of at least one exceedance in ``years`` years: ``1 - exp(-years * rate)``."""
     return 1.0 - np.exp(-years * np.asarray(rate, dtype=float))
+
+
+probability_of_collapse_in_years = probability_in_period  # name used by the paper-era API
 
 
 @dataclass(frozen=True)
@@ -141,34 +145,65 @@ def simulate_collapse_rate(
 
 @dataclass(frozen=True)
 class FrequencyUncertainty:
-    """Distribution of the mean annual frequency of exceedance due to parameter uncertainty."""
+    """Mean annual frequency of exceedance and its uncertainty due to the fitted parameters.
+
+    ``rates`` holds one frequency per parameter draw (``method="simulation"`` or supplied
+    ``draws``); with an analytic method only ``mean`` and ``std`` are available.
+    """
 
     mean: float
-    rates: NDArray[np.float64]
+    std: float
     period: float
-
-    @property
-    def std(self) -> float:
-        return float(np.std(self.rates, ddof=1))
+    rates: NDArray[np.float64] | None = None
 
     @property
     def cov(self) -> float:
+        """Coefficient of variation ``std / mean``."""
         return self.std / self.mean
 
     @property
     def probabilities(self) -> NDArray[np.float64]:
-        return probability_of_collapse_in_years(self.rates, self.period)
+        """Probability of at least one exceedance within ``period`` years, per draw."""
+        if self.rates is None:
+            raise ValueError("per-draw values exist only for method='simulation' or draws=")
+        return probability_in_period(self.rates, self.period)
 
     def interval(self, level: float = 0.95) -> tuple[float, float]:
+        """Percentile interval of the draws (normal approximation for analytic methods)."""
+        if self.rates is None:
+            z = norm.ppf(0.5 + level / 2)
+            return self.mean - z * self.std, self.mean + z * self.std
         lo, hi = np.quantile(self.rates, [(1 - level) / 2, 1 - (1 - level) / 2])
         return float(lo), float(hi)
+
+
+def mean_annual_frequency(
+    fragility,
+    hazard: HazardCurve | CollapseData,
+    im_grid: ArrayLike | None = None,
+    **curve_kwargs,
+) -> float:
+    """Mean annual frequency of exceeding the limit state (paper Eq. 11).
+
+    ``fragility`` is a fitted :class:`~pyFragility.FragilityFit`, a
+    :class:`~pyFragility.LognormalFragility`, or any callable ``im -> probability``; the
+    fragility is integrated against ``hazard`` with a midpoint Riemann sum.
+    """
+    prob = fragility.probability if hasattr(fragility, "probability") else fragility
+    if curve_kwargs:
+        return mean_annual_collapse_frequency(lambda im: prob(im, **curve_kwargs), hazard, im_grid)
+    return mean_annual_collapse_frequency(prob, hazard, im_grid)
+
+
+_FREQUENCY_METHODS = ("simulation", "delta", "paper")
 
 
 def frequency_uncertainty(
     fit,
     hazard: HazardCurve | CollapseData,
     *,
-    kind: str = "sandwich",
+    cov: str = "sandwich",
+    method: str = "simulation",
     draws=None,
     num_samples: int = 1000,
     period: float = 50.0,
@@ -178,19 +213,46 @@ def frequency_uncertainty(
 ) -> FrequencyUncertainty:
     """Mean annual frequency of exceedance with parameter uncertainty, for any fitted model.
 
-    Parameters are drawn from the asymptotic normal distribution with the ``"mle"`` or
-    ``"sandwich"`` covariance (comparing the two shows how much misspecification matters for
-    risk), unless ``draws`` supplies parameter samples, e.g. ``bootstrap.params`` or
-    ``posterior.params``.
+    Parameters
+    ----------
+    fit
+        A :class:`~pyFragility.FragilityFit`.
+    hazard
+        The ground-motion hazard curve.
+    cov
+        Which parameter covariance to propagate: ``"mle"``, ``"expected"`` or ``"sandwich"``
+        (see :meth:`FragilityFit.covariance`). Comparing ``"mle"`` with ``"sandwich"`` shows
+        how much probability-model misspecification matters for risk.
+    method
+        ``"simulation"``: draw parameters from the asymptotic normal distribution (or use
+        ``draws``, e.g. bootstrap or posterior samples) and integrate each curve.
+        ``"delta"``: first-order variance ``g' V g`` of the frequency, ``g`` its gradient with
+        respect to the parameters. ``"paper"``: the paper's Eq. 12, which sums the pointwise
+        standard errors of the fragility assuming they are perfectly correlated (conservative).
+    draws
+        Optional parameter samples, shape ``(n, n_params)``; implies ``method="simulation"``.
     """
+    if method not in _FREQUENCY_METHODS:
+        raise ValueError(f"method must be one of {_FREQUENCY_METHODS}")
     hz = _hazard(hazard)
     grid = default_im_grid(hz) if im_grid is None else np.asarray(im_grid, dtype=float)
     mids, _, d_lam = _increments(hz, grid)
-    samples = fit.simulate_params(num_samples, kind, seed) if draws is None else np.asarray(draws)
     lik = fit.likelihood
-    rates = np.array([np.sum(lik.curve(p, mids, **curve_kwargs) * d_lam) for p in samples])
     centre = float(np.sum(fit.probability(mids, **curve_kwargs) * d_lam))
-    return FrequencyUncertainty(centre, rates, period)
+    if draws is not None or method == "simulation":
+        samples = (
+            fit.simulate_params(num_samples, cov, seed) if draws is None else np.asarray(draws)
+        )
+        rates = np.array([np.sum(lik.curve(p, mids, **curve_kwargs) * d_lam) for p in samples])
+        return FrequencyUncertainty(centre, float(np.std(rates, ddof=1)), period, rates)
+    matrix = fit.covariance(cov)
+    if method == "delta":
+        jac = _numdiff.jacobian(lambda p: lik.curve(p, mids, **curve_kwargs), fit.params)
+        grad = d_lam @ jac
+        return FrequencyUncertainty(centre, float(np.sqrt(grad @ matrix @ grad)), period)
+    jac = _numdiff.jacobian(lambda p: lik.curve(p, grid[:-1], **curve_kwargs), fit.params)
+    se = np.sqrt(np.einsum("ij,jk,ik->i", jac, matrix, jac))
+    return FrequencyUncertainty(centre, float(abs(np.sum(d_lam * se))), period)
 
 
 def vulnerability(fit, im: ArrayLike, mean_losses: ArrayLike) -> NDArray[np.float64]:
@@ -222,3 +284,20 @@ def expected_annual_loss(
     grid = default_im_grid(hz) if im_grid is None else np.asarray(im_grid, dtype=float)
     mids, _, d_lam = _increments(hz, grid)
     return float(np.sum(vulnerability(fit, mids, mean_losses) * d_lam))
+
+
+__all__ = [
+    "CollapseRateSimulation",
+    "FrequencyUncertainty",
+    "HazardCurve",
+    "collapse_frequency_std",
+    "default_im_grid",
+    "expected_annual_loss",
+    "frequency_uncertainty",
+    "mean_annual_collapse_frequency",
+    "mean_annual_frequency",
+    "probability_in_period",
+    "probability_of_collapse_in_years",
+    "simulate_collapse_rate",
+    "vulnerability",
+]
