@@ -16,22 +16,22 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
-    "numpy>=1.26",
-    "scipy>=1.11",
-    "pandas>=2.1",
-    "statsmodels>=0.14",
-    "matplotlib>=3.8",
+    "numpy>=2.4.6",
+    "scipy>=1.17.1",
+    "pandas>=3.0.5",
+    "statsmodels>=0.15.0",
+    "matplotlib>=3.11.2",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
-    "pytest-cov>=5.0",
-    "ruff>=0.6",
-    "numdifftools>=0.9.41",
-    "sympy>=1.12",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.8",
+    "numdifftools>=0.11.1",
+    "sympy>=1.14.0",
 ]
-examples = ["ipykernel>=6.29", "nbformat>=5.10", "nbclient>=0.10"]
+examples = ["ipykernel>=7.3.0", "nbformat>=5.11.1", "nbclient>=0.11.0"]
 
 [project.urls]
 Homepage = "https://github.com/laxmandahal/pyFragility"
