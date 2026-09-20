@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - run: uv venv --python 3.13 && uv pip install ruff
       - run: uv run --no-sync ruff check .
       - run: uv run --no-sync ruff format --check .
@@ -41,7 +41,7 @@ jobs:
             python-version: "3.13"
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - run: uv venv --python ${{ matrix.python-version }}
       - run: uv pip install -e ".[dev]"
       # coverage is measured (and enforced) on one leg only
@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - run: uv venv --python 3.11
       - run: uv pip install --resolution lowest-direct -e ".[dev]"
       - run: uv run --no-sync pytest -m "not notebooks"
@@ -72,7 +72,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - run: uv venv --python 3.13 && uv pip install -e ".[dev,examples]"
       - run: uv run --no-sync pytest -m notebooks
 
@@ -81,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - run: uv venv --python 3.13 && uv pip install build twine
       - run: uv run --no-sync python -m build
       - run: uv run --no-sync twine check --strict dist/*
