@@ -4,7 +4,8 @@ dynamic = ["version"]
 description = "Fragility function fitting for any data type, with misspecification-robust uncertainty."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "BSD-4-Clause" }
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 authors = [{ name = "Laxman Dahal", email = "laxman.dahal@ucla.edu" }]
 keywords = ["fragility", "collapse risk", "mle", "qmle", "sandwich estimator", "misspecification"]
 classifiers = [
