@@ -188,3 +188,24 @@ def test_legacy_wrappers_plot_and_compute(b2):
     ):
         plot()
         plt.close("all")
+
+
+@pytest.mark.parametrize("noise", [1e-9, 1e-8, 5e-8])
+def test_convergence_is_detected_despite_numerical_derivative_noise(monkeypatch, noise):
+    """Numerically differentiated models (e.g. beta-binomial) have a score noise floor that
+    differs between platforms and library versions; convergence must not depend on it.
+    (Regression test: the fit was reported as non-converged on Windows / old dependencies.)"""
+    from pyFragility import numdiff
+
+    rng = np.random.default_rng(0)
+    original = numdiff.jacobian
+    monkeypatch.setattr(
+        numdiff, "jacobian", lambda f, x: original(f, x) + noise * rng.standard_normal()
+    )
+    im = np.linspace(0.3, 3, 60)
+    mu = 0.5 * (1 + np.tanh(2.0 * (np.log(im) - 0.2)))
+    rng2 = np.random.default_rng(3)
+    k = rng2.binomial(40, rng2.beta(mu * 4, (1 - mu) * 4)).astype(float)
+    fit = fit_binomial(im, k, np.full(im.size, 40.0), link="logit", overdispersion=True)
+    assert fit.converged
+    np.testing.assert_allclose(fit.params, [-0.796, 4.296, 6.19], rtol=2e-3)
