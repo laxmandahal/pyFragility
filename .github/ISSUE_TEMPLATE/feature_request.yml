@@ -1,0 +1,14 @@
+name: Feature request
+description: A data type, model, or tool you would like supported
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What do you need, and what data do you have?
+    validations: {required: true}
+  - type: textarea
+    id: refs
+    attributes:
+      label: References
+      description: Papers or software that do this already.

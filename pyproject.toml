@@ -1,6 +1,6 @@
 [project]
 name = "pyFragility"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Fragility function fitting for any data type, with misspecification-robust uncertainty."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -40,6 +40,9 @@ Homepage = "https://github.com/laxmandahal/pyFragility"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+path = "src/pyFragility/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/pyFragility"]
 
@@ -52,7 +55,32 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "slow: simulation-heavy tests (deselect with -m 'not slow')",
+    "notebooks: executes the example notebooks (needs the 'examples' extra)",
+]
+filterwarnings = [
+    "error",
+    # third-party deprecations we cannot act on (raised inside dependencies)
+    "ignore::DeprecationWarning:mpmath.*",
+    "ignore::DeprecationWarning:pyparsing.*",
+    "ignore::pyparsing.warnings.PyparsingDeprecationWarning",
+]
 
 [tool.ruff.lint.per-file-ignores]
 "*.ipynb" = ["E501"]
+
+[tool.coverage.run]
+source = ["src/pyFragility"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
