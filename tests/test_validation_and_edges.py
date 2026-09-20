@@ -9,22 +9,24 @@ import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 
 from pyFragility import (  # noqa: E402
-    BinomialGLM,
-    BinomialLognormal,
-    CloudRegression,
     CollapseData,
     GLMProbitClass,
     HazardCurve,
     Likelihood,
-    LognormalCapacity,
     MaximumLikelihoodMethod,
-    OrdinalGLM,
     fit_binomial,
     fit_ida,
     fit_likelihood,
     fit_msa,
-    profile_likelihood_interval,
 )
+from pyFragility.binomial import (
+    BinomialGLM,  # noqa: E402
+    BinomialLognormal,
+)
+from pyFragility.capacity import LognormalCapacity
+from pyFragility.cloud import CloudRegression
+from pyFragility.inference import profile_likelihood_interval
+from pyFragility.ordinal import OrdinalGLM
 
 
 @pytest.mark.parametrize(
@@ -101,8 +103,10 @@ def test_base_likelihood_defaults_and_unsupported_operations():
     ):
         with pytest.raises(NotImplementedError):
             call()
-    with pytest.raises(ValueError, match="kind"):
+    with pytest.raises(ValueError, match="cov must be one of"):
         fit.covariance("bogus")
+    with pytest.raises(NotImplementedError, match="expected information"):
+        fit.covariance("expected")
 
 
 def test_complete_separation_warns_instead_of_returning_silently():
@@ -126,7 +130,7 @@ def test_bootstrap_raises_when_refits_do_not_converge(b2):
     # force degenerate resamples with a flat response, which cannot be fitted
     fit.likelihood.resample = lambda rng, p, kind: original(rng, np.array([1e-9, 1e-9]), kind)
     with pytest.raises(RuntimeError, match="bootstrap refits converged"):
-        fit.bootstrap(20, kind="parametric")
+        fit.bootstrap(20, resample="parametric")
 
 
 def test_profile_interval_by_index_and_boundary_behaviour():
@@ -153,13 +157,16 @@ def test_ordinal_conveniences():
     x = np.repeat(np.linspace(0.3, 3, 10), 30)
     rng = np.random.default_rng(0)
     y = np.digitize(1.1 * np.log(x) + rng.standard_normal(x.size), [-0.5, 0.8])
-    from pyFragility import fit_damage_states
+    from pyFragility import (
+        fit_damage_states,
+        fit_damage_states_independent,
+    )
 
     fit = fit_damage_states(x, y, cluster=np.arange(x.size) // 15)
     assert fit.likelihood.state_probabilities(fit.params, 1.0).shape == (1, 3)
     with pytest.raises(ValueError, match="integer"):
         fit_damage_states(x, y + 0.5)
-    states = fit_damage_states(x, y, parallel=False)
+    states = fit_damage_states_independent(x, y)
     lo, hi = states.confidence_band(np.array([1.0, 2.0]), state=2)
     assert np.all(lo < hi)
     for kind in ("nonparametric", "pairs"):
@@ -195,7 +202,9 @@ def test_convergence_is_detected_despite_numerical_derivative_noise(monkeypatch,
     """Numerically differentiated models (e.g. beta-binomial) have a score noise floor that
     differs between platforms and library versions; convergence must not depend on it.
     (Regression test: the fit was reported as non-converged on Windows / old dependencies.)"""
-    from pyFragility import numdiff
+    from pyFragility import (
+        _numdiff as numdiff,
+    )
 
     rng = np.random.default_rng(0)
     original = numdiff.jacobian

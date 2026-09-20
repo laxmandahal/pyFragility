@@ -54,3 +54,9 @@ def fit_mle(
     res = minimize(objective, x0, jac=None if derivative_free else gradient, method=method)
     theta, beta = (float(v) for v in res.x)
     return MLEResult(LognormalFragility(theta, beta), float(-res.fun), bool(res.success))
+
+
+__all__ = [
+    "MLEResult",
+    "fit_mle",
+]

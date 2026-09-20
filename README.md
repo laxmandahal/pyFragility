@@ -50,7 +50,7 @@ pf.compare_models({"probit": fit, "logit": pf.fit_msa(im, collapse_count, num_gm
 
 # risk: mean annual frequency with parameter uncertainty, and expected annual loss
 hazard = pf.HazardCurve.from_return_periods(im_levels, return_periods)
-pf.frequency_uncertainty(fit, hazard, kind="sandwich")
+pf.frequency_uncertainty(fit, hazard, cov="sandwich")
 pf.expected_annual_loss(damage_state_fit, hazard, mean_loss_ratios)
 
 pf.fragility_table({"B1": fit_b1, "B2": fit_b2})  # median / dispersion table with standard errors
@@ -58,16 +58,36 @@ pf.fragility_table({"B1": fit_b1, "B2": fit_b2})  # median / dispersion table wi
 See [examples/Fragility_Guide.ipynb](examples/Fragility_Guide.ipynb) for a walk-through of every data type and
 [examples/Example_Implementation.ipynb](examples/Example_Implementation.ipynb) for the paper's wood-frame case study.
 
+### Public API
+The top level holds the everyday workflow (`fit_*`, `FragilityFit`, `HazardCurve`, `compare_models`,
+`frequency_uncertainty`, `expected_annual_loss`, `fragility_table`, `plot_fit`, ...). The rest is reached through
+the submodules:
+
+| Module | Contents |
+| --- | --- |
+| `pyFragility.inference` | `information_matrix_test`, `goodness_of_fit`, `bootstrap`, `profile_likelihood_interval`, ... |
+| `pyFragility.bayes` | `sample_posterior`, `independent_priors` |
+| `pyFragility.risk` | `HazardCurve`, `mean_annual_frequency`, `frequency_uncertainty`, `vulnerability`, `expected_annual_loss` |
+| `pyFragility.binomial`, `.capacity`, `.cloud`, `.ordinal` | data adapters (likelihood classes) and their `fit_*` functions |
+| `pyFragility.engine` | `Likelihood` (extension point), `FragilityFit`, covariance machinery |
+| `pyFragility.links` | probit / logit / cloglog |
+| `pyFragility.mle`, `.glm`, `.variance`, `.likelihood` | reference implementation of the paper (`fit_mle`, `covariance_estimates`, ...) |
+
 ### Architecture
 * **Data adapters** (`binomial`, `capacity`, `cloud`, `ordinal`) turn a data set into a `Likelihood`; a new data
   type is one small class with a log-likelihood and a curve.
-* **Engine** (`engine`): fitting, MLE and sandwich covariances (optionally cluster-robust), confidence bands,
-  delta-method quantities.
-* **Tools that work on any fit**: `inference` (misspecification test, goodness of fit, model comparison,
-  bootstrap, profile likelihood), `bayes`, `risk`, `export`, `plotting`.
+* **Engine** (`engine`): fitting, three covariance estimates (`"mle"`, `"expected"`, `"sandwich"`, the last
+  optionally cluster-robust), confidence bands, delta-method quantities.
+* **Tools that work on any fit**: `inference`, `bayes`, `risk`, `export`, `plotting`.
 
-The original API (`fit_mle`, `covariance_estimates`, `fit_probit_glm`, and the deprecated `MaximumLikelihoodMethod`
-and `GLMProbitClass`) is kept and reproduces the paper's numbers.
+The paper's original functions (`fit_mle`, `covariance_estimates`, `fit_probit_glm`, ...) remain in
+`pyFragility.mle`, `.variance` and `.glm` as a reference implementation that the test suite compares the new
+code against, and the deprecated `MaximumLikelihoodMethod` and `GLMProbitClass` are still importable from the
+package root.
+
+## License
+BSD 3-Clause. (Versions up to 0.0.1 were released under BSD 4-Clause; the copyright holder relicensed the
+package for 0.2.0.)
 
 ## Changes from 0.0.x
 * New modular API above; `MaximumLikelihoodMethod` and `GLMProbitClass` remain as deprecated wrappers.

@@ -160,7 +160,7 @@ def likelihood_ratio_test(
 class BootstrapResult:
     fit: FragilityFit
     params: NDArray
-    kind: str
+    resample: str
     n_failed: int
 
     def covariance(self) -> NDArray:
@@ -182,21 +182,21 @@ class BootstrapResult:
 
 
 def bootstrap(
-    fit: FragilityFit, *, n_boot: int = 500, kind: str = "nonparametric", seed: int | None = 0
+    fit: FragilityFit, *, n_boot: int = 500, resample: str = "nonparametric", seed: int | None = 0
 ) -> BootstrapResult:
     """Bootstrap the fit.
 
-    ``kind="parametric"`` simulates new data from the fitted model, so it reproduces the
-    model-based (MLE) variability. ``kind="nonparametric"`` resamples the individual records
+    ``resample="parametric"`` simulates new data from the fitted model, so it reproduces the
+    model-based (MLE) variability. ``resample="nonparametric"`` resamples the individual records
     within each stripe (grouped counts), or rows/clusters for ungrouped data; it holds the
-    stripes fixed. ``kind="pairs"`` resamples whole rows (stripes, or clusters if ids were
+    stripes fixed. ``resample="pairs"`` resamples whole rows (stripes, or clusters if ids were
     given), so it also captures scatter between stripes and is the bootstrap counterpart of the
     sandwich covariance. Refits that fail to converge are discarded.
     """
     rng = np.random.default_rng(seed)
     draws, failed = [], 0
     for _ in range(n_boot):
-        new = fit.likelihood.resample(rng, fit.params, kind)
+        new = fit.likelihood.resample(rng, fit.params, resample)
         try:
             refit = fit_likelihood(new, start=fit.params, warn=False)
         except (np.linalg.LinAlgError, FloatingPointError):
@@ -208,7 +208,7 @@ def bootstrap(
             failed += 1
     if len(draws) < max(10, n_boot // 2):
         raise RuntimeError(f"only {len(draws)} of {n_boot} bootstrap refits converged")
-    return BootstrapResult(fit, np.array(draws), kind, failed)
+    return BootstrapResult(fit, np.array(draws), resample, failed)
 
 
 # ------------------------------------------------------------------------------------------
@@ -278,3 +278,15 @@ def profile_likelihood_interval(
 
 
 _ = norm
+
+__all__ = [
+    "BootstrapResult",
+    "GoodnessOfFit",
+    "TestResult",
+    "bootstrap",
+    "compare_models",
+    "goodness_of_fit",
+    "information_matrix_test",
+    "likelihood_ratio_test",
+    "profile_likelihood_interval",
+]

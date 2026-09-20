@@ -52,3 +52,9 @@ def fit_probit_glm(data: CollapseData, cov_type: CovType = "nonrobust") -> Probi
     return ProbitGLMResult(
         ProbitFragility(beta0, beta1), np.asarray(res.cov_params()), cov_type, res
     )
+
+
+__all__ = [
+    "ProbitGLMResult",
+    "fit_probit_glm",
+]

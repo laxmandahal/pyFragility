@@ -29,6 +29,7 @@ def _z_and_terms(data: CollapseData, theta: float, beta: float):
 
 
 def log_likelihood(data: CollapseData, theta: float, beta: float) -> float:
+    """Binomial log-likelihood (without the binomial coefficient) at ``(theta, beta)``."""
     z = np.log(data.im / theta) / beta
     k, n = data.collapse_count, data.num_gm
     return float(np.sum(k * log_ndtr(z) + (n - k) * log_ndtr(-z)))
@@ -66,3 +67,11 @@ def hessian(data: CollapseData, theta: float, beta: float) -> NDArray[np.float64
     h_tb = np.sum(l_zz * z_theta * z_beta + l_z * z_tb)
     h_bb = np.sum(l_zz * z_beta**2 + l_z * z_bb)
     return np.array([[h_tt, h_tb], [h_tb, h_bb]])
+
+
+__all__ = [
+    "hessian",
+    "log_likelihood",
+    "score",
+    "score_by_level",
+]

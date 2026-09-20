@@ -106,3 +106,6 @@ class GLMProbitClass:
         plotting.plot_parameter_distribution(
             frag.beta1, self.vcov.loc["logIM", "logIM"], r"$\beta_1$", ax2
         )
+
+
+__all__ = ["GLMProbitClass"]

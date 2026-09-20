@@ -165,3 +165,9 @@ def fit_cloud(
         modified cloud, which combines collapse and non-collapse cases.
     """
     return fit_likelihood(CloudRegression(im, edp, threshold, collapse, cluster=cluster))
+
+
+__all__ = [
+    "CloudRegression",
+    "fit_cloud",
+]

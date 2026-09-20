@@ -1,7 +1,11 @@
 import numpy as np
 import pytest
 
-from pyFragility import CollapseData, LognormalFragility, ProbitFragility
+from pyFragility import (
+    CollapseData,
+    LognormalFragility,
+)
+from pyFragility.fragility import ProbitFragility
 
 
 def test_validation():

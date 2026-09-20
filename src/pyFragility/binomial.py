@@ -154,6 +154,11 @@ class BinomialGLM(_BinomialBase):
         k, n = self.k, self.n
         return k * r1 - (n - k) * r2, k * (g * r1 - r1**2) - (n - k) * (g * r2 + r2**2)
 
+    def expected_information(self, params: NDArray) -> NDArray:
+        eta = self._eta(params)
+        log_w = 2 * self.link.log_pdf(eta) - self.link.log_cdf(eta) - self.link.log_sf(eta)
+        return self.X.T @ ((self.n * np.exp(log_w))[:, None] * self.X)
+
     def score_by_obs(self, params: NDArray) -> NDArray:
         return self._eta_derivs(params)[0][:, None] * self.X
 
@@ -247,6 +252,9 @@ class BetaBinomialGLM(BinomialGLM):
     def hessian(self, params):
         return Likelihood.hessian(self, params)
 
+    def expected_information(self, params):
+        raise NotImplementedError("the beta-binomial GLM has no closed-form expected information")
+
     def saturated_loglik(self):
         return None
 
@@ -325,6 +333,13 @@ class BinomialLognormal(_BinomialBase):
             + _log_binom_coef(self.k, self.n)
         )
 
+    def expected_information(self, params):
+        theta, beta = params
+        z = np.log(self.im / theta) / beta
+        log_w = 2 * norm.logpdf(z) - special.log_ndtr(z) - special.log_ndtr(-z)
+        jac = np.column_stack([np.full_like(z, -1.0 / (theta * beta)), -z / beta])
+        return jac.T @ ((self.n * np.exp(log_w))[:, None] * jac)
+
     def score_by_obs(self, params):
         return ln_lik.score_by_level(self._stripes, params[0], params[1])
 
@@ -350,18 +365,18 @@ class BinomialLognormal(_BinomialBase):
 # ------------------------------------------------------------------------------------------
 # user-facing functions
 # ------------------------------------------------------------------------------------------
-def _unpack(im, k, n):
+def _unpack(im, num_exceed, num_total):
     if isinstance(im, CollapseData):
         return im.im, im.collapse_count, im.num_gm
-    if k is None or n is None:
+    if num_exceed is None or num_total is None:
         raise TypeError("pass a CollapseData, or im together with the counts")
-    return im, k, n
+    return im, num_exceed, num_total
 
 
 def fit_binomial(
     im: ArrayLike | CollapseData,
-    k: ArrayLike | None = None,
-    n: ArrayLike | None = None,
+    num_exceed: ArrayLike | None = None,
+    num_total: ArrayLike | None = None,
     *,
     link: str | Link = "probit",
     overdispersion: bool = False,
@@ -370,7 +385,7 @@ def fit_binomial(
     cluster: ArrayLike | None = None,
     im_names: list[str] | None = None,
 ) -> FragilityFit:
-    """Fit exceedance counts ``k`` out of ``n`` at each intensity.
+    """Fit ``num_exceed`` exceedances out of ``num_total`` records at each intensity.
 
     Parameters
     ----------
@@ -389,7 +404,7 @@ def fit_binomial(
         Cluster label per row (e.g. the earthquake event). The sandwich covariance then
         accounts for within-cluster correlation.
     """
-    im, k, n = _unpack(im, k, n)
+    im, k, n = _unpack(im, num_exceed, num_total)
     link = get_link(link)
     im_arr = np.asarray(im, dtype=float)
     single_log = im_arr.ndim == 1 or (im_arr.shape[1] == 1)
@@ -413,13 +428,14 @@ def fit_binomial(
     return fit_likelihood(lik)
 
 
-def fit_msa(im, collapse_count=None, num_gm=None, **kwargs) -> FragilityFit:
-    """Multiple-stripe analysis: ``collapse_count`` of ``num_gm`` ground motions at each stripe.
+def fit_msa(im, num_exceed=None, num_gm=None, **kwargs) -> FragilityFit:
+    """Multiple-stripe analysis: ``num_exceed`` of ``num_gm`` ground motions exceed the limit
+    state (e.g. collapse) at each stripe.
 
     Accepts the same options as :func:`fit_binomial`. With the defaults this is the paper's
     lognormal ``(theta, beta)`` fit with MLE and sandwich uncertainty.
     """
-    return fit_binomial(im, collapse_count, num_gm, **kwargs)
+    return fit_binomial(im, num_exceed, num_gm, **kwargs)
 
 
 def fit_field_data(
@@ -445,5 +461,3 @@ __all__ = [
     "fit_field_data",
     "fit_msa",
 ]
-
-_ = norm  # re-exported for type checkers in downstream modules

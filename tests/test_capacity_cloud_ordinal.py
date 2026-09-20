@@ -5,14 +5,15 @@ from scipy import stats
 from statsmodels.miscmodels.ordinal_model import OrderedModel
 
 from pyFragility import (
-    CloudRegression,
-    LognormalCapacity,
     fit_cloud,
     fit_damage_states,
+    fit_damage_states_independent,
     fit_ida,
-    get_link,
 )
-from pyFragility.numdiff import jacobian as num_jacobian
+from pyFragility._numdiff import jacobian as num_jacobian
+from pyFragility.capacity import LognormalCapacity
+from pyFragility.cloud import CloudRegression
+from pyFragility.links import get_link
 
 
 def test_ida_uncensored_closed_form():
@@ -59,7 +60,7 @@ def test_ida_bootstrap_runs_and_curve_is_lognormal():
     cap = np.exp(np.log(2.0) + 0.3 * rng.standard_normal(60))
     fit = fit_ida(cap)
     for kind in ("parametric", "nonparametric"):
-        b = fit.bootstrap(80, kind=kind)
+        b = fit.bootstrap(80, resample=kind)
         assert b.std_errors()[0] == pytest.approx(fit.std_errors("mle")[0], rel=0.5)
     ln = fit.lognormal_parameters()
     assert ln.fragility.probability(2.0) == pytest.approx(0.5, abs=0.1)
@@ -106,7 +107,7 @@ def test_modified_cloud_with_collapses():
     with pytest.raises(NotImplementedError):
         fit.lognormal_parameters()
     assert isinstance(fit.likelihood, CloudRegression)
-    b = fit.bootstrap(40, kind="parametric")
+    b = fit.bootstrap(40, resample="parametric")
     assert b.params.shape[1] == 5
 
 
@@ -159,12 +160,12 @@ def test_ordinal_curves_never_cross_and_states_sum_to_one():
         fit.probability(grid, state=9)
     gof = fit.goodness_of_fit()
     assert gof.dof == fit.n_obs - fit.n_params and 0 <= gof.p_value <= 1
-    assert fit.bootstrap(30, kind="parametric").params.shape[1] == 4
+    assert fit.bootstrap(30, resample="parametric").params.shape[1] == 4
 
 
 def test_ordinal_independent_fits_and_input_validation():
     x, y = _ordinal_data()
-    states = fit_damage_states(x, y, parallel=False)
+    states = fit_damage_states_independent(x, y)
     assert states.n_states == 3
     assert states.probability([1.0], state=2).shape == (1,)
     assert states.summary().shape[0] == 6

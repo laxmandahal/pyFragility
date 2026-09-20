@@ -26,8 +26,9 @@ tests against the newest and pre-release dependencies. Warnings are errors in th
 * **A bug fix ships with a test that fails without it.**
 * **Statistical tests use fixed seeds and tolerances wide enough for other platforms.** Do not
   tighten a tolerance to the digits your machine happens to produce.
-* **Public API changes are deliberate.** New public names go in `__all__` *and* in `PUBLIC_API` in
-  `tests/test_package.py`; removing or renaming one is a breaking change (see the changelog).
+* **Public API changes are deliberate.** New public names go in the module's `__all__` *and* in
+  `TOP_LEVEL_API` / `MODULE_API` in `tests/test_package.py`; anything not meant to be public gets a
+  leading underscore; removing or renaming one is a breaking change (see the changelog).
 * **Every public function or class has a numpydoc docstring.**
 * Runtime dependencies stay minimal; `sympy` and `numdifftools` are test-only.
 

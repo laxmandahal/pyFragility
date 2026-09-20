@@ -58,3 +58,9 @@ class ProbitFragility:
         """Delta-method covariance of ``(theta, beta)`` from that of ``(beta0, beta1)``."""
         jac = self.jacobian_to_lognormal()
         return jac @ np.asarray(cov, dtype=float) @ jac.T
+
+
+__all__ = [
+    "LognormalFragility",
+    "ProbitFragility",
+]

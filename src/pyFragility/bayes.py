@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 from numpy.typing import ArrayLike, NDArray
 
-from pyFragility import numdiff
+from pyFragility import _numdiff as numdiff
 from pyFragility.engine import FragilityFit, Likelihood
 
 
@@ -150,3 +150,10 @@ def sample_posterior(
         if t >= burn_in and (t - burn_in) % thin == 0:
             chain.append(lik.from_unconstrained(u))
     return PosteriorSamples(fit, np.array(chain), accepted / (n_samples * thin))
+
+
+__all__ = [
+    "PosteriorSamples",
+    "independent_priors",
+    "sample_posterior",
+]

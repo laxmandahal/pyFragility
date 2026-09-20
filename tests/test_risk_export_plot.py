@@ -10,19 +10,19 @@ import pytest  # noqa: E402
 
 from pyFragility import (  # noqa: E402
     HazardCurve,
-    collapse_frequency_std,
     expected_annual_loss,
     fit_damage_states,
+    fit_damage_states_independent,
     fit_ida,
     fit_msa,
-    fit_probit_glm,
     fragility_json,
     fragility_table,
     frequency_uncertainty,
-    mean_annual_collapse_frequency,
     plot_fit,
     vulnerability,
 )
+from pyFragility.glm import fit_probit_glm
+from pyFragility.risk import collapse_frequency_std, mean_annual_collapse_frequency
 
 RP = [15, 25, 50, 75, 100, 150, 250, 500, 1000, 2500, 2700, 3000, 3300, 3500, 3700, 4000]
 
@@ -30,7 +30,7 @@ RP = [15, 25, 50, 75, 100, 150, 250, 500, 1000, 2500, 2700, 3000, 3300, 3500, 37
 def test_hazard_curve_and_generic_frequency(b2, golden):
     hz = HazardCurve.from_return_periods(b2.im, RP)
     fit = fit_msa(b2)
-    unc = frequency_uncertainty(fit, hz, kind="mle", num_samples=2000)
+    unc = frequency_uncertainty(fit, hz, cov="mle", num_samples=2000)
     # same MAFC as the legacy machinery, and consistent with the probit-GLM route
     assert unc.mean == pytest.approx(golden["B2-Existing"]["mafc"], rel=1e-3)
     assert mean_annual_collapse_frequency(fit.probability, b2) == pytest.approx(unc.mean)
@@ -39,14 +39,14 @@ def test_hazard_curve_and_generic_frequency(b2, golden):
     delta = collapse_frequency_std(glm.fragility, glm.cov, b2)
     assert unc.std == pytest.approx(delta, rel=0.25)
     # sandwich uncertainty is smaller for the paper's data (its finding for wood-frame buildings)
-    sw = frequency_uncertainty(fit, hz, kind="sandwich", num_samples=2000)
+    sw = frequency_uncertainty(fit, hz, cov="sandwich", num_samples=2000)
     assert sw.std < unc.std
     lo, hi = unc.interval(0.9)
     assert lo < unc.mean < hi and unc.probabilities.shape == (2000,)
     with pytest.raises(TypeError):
         frequency_uncertainty(fit, "hazard")
     # externally supplied draws (e.g. bootstrap) are used as-is
-    b = fit.bootstrap(40, kind="parametric")
+    b = fit.bootstrap(40, resample="parametric")
     assert frequency_uncertainty(fit, hz, draws=b.params).rates.shape[0] == b.params.shape[0]
 
 
@@ -63,8 +63,8 @@ def test_vulnerability_and_expected_annual_loss():
     x = np.repeat(np.linspace(0.2, 3, 15), 40)
     y = np.digitize(1.2 * np.log(x) + rng.standard_normal(x.size), [-1.0, 0.2, 1.2])
     losses = [0.0, 0.1, 0.4, 1.0]
-    for parallel in (True, False):
-        fit = fit_damage_states(x, y, parallel=parallel)
+    for fitter in (fit_damage_states, fit_damage_states_independent):
+        fit = fitter(x, y)
         grid = np.linspace(0.1, 4, 400)
         v_at = np.array([0.1, 1.0, 5.0])
         v = vulnerability(fit, v_at, losses)

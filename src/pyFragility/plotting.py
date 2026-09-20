@@ -112,8 +112,13 @@ def plot_fit(
 ) -> Axes:
     """Fitted curve of any :class:`~pyFragility.FragilityFit` with data and a confidence band.
 
-    ``band`` is ``"mle"``, ``"sandwich"``, ``"both"`` or ``None``; ``**kwargs`` are passed to
-    ``fit.probability`` (e.g. ``state=2`` or ``threshold=0.02``).
+    Parameters
+    ----------
+    band
+        ``None`` for no band, a covariance name (``"mle"``, ``"expected"``, ``"sandwich"``), or
+        ``"both"`` to overlay the MLE and sandwich bands.
+    **kwargs
+        Passed to ``fit.probability`` (e.g. ``state=2`` or ``threshold=0.02``).
     """
     ax = _axes(ax)
     obs = fit.likelihood.observed()
@@ -122,11 +127,15 @@ def plot_fit(
         im_grid = np.linspace(0.01, float(np.max(base)) * 1.25, 400)
     grid = np.asarray(im_grid, dtype=float)
     ax.plot(grid, fit.probability(grid, **kwargs), color="red", label="Fitted fragility")
-    styles = {"mle": ("tab:blue", "MLE"), "sandwich": ("black", "Sandwich (QMLE)")}
-    kinds = ["mle", "sandwich"] if band == "both" else ([band] if band else [])
-    for kind in kinds:
-        lo, hi = fit.confidence_band(grid, level, kind, **kwargs)
-        color, label = styles[kind]
+    styles = {
+        "mle": ("tab:blue", "MLE"),
+        "expected": ("tab:cyan", "MLE (expected information)"),
+        "sandwich": ("black", "Sandwich (QMLE)"),
+    }
+    covs = ["mle", "sandwich"] if band == "both" else ([band] if band else [])
+    for cov in covs:
+        lo, hi = fit.confidence_band(grid, level, cov, **kwargs)
+        color, label = styles[cov]
         ax.plot(grid, lo, color=color, linestyle="dashed", label=f"{100 * level:g}% band, {label}")
         ax.plot(grid, hi, color=color, linestyle="dashed")
     if obs is not None:
@@ -136,3 +145,11 @@ def plot_fit(
     ax.legend()
     ax.grid(linewidth=0.5)
     return ax
+
+
+__all__ = [
+    "plot_confidence_band",
+    "plot_fit",
+    "plot_fragility",
+    "plot_parameter_distribution",
+]

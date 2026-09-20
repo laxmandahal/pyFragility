@@ -12,6 +12,8 @@ from scipy.stats import norm
 
 
 class Link:
+    """Base class of link functions ``F(eta)`` mapping a linear predictor to a probability."""
+
     name: str
 
     def cdf(self, eta):
@@ -36,6 +38,8 @@ class Link:
 
 
 class Probit(Link):
+    """Standard normal CDF; with ``ln(im)`` as predictor this is the lognormal fragility."""
+
     name = "probit"
 
     def cdf(self, eta):
@@ -58,6 +62,8 @@ class Probit(Link):
 
 
 class Logit(Link):
+    """Logistic CDF (log-logistic fragility when the predictor is ``ln(im)``)."""
+
     name = "logit"
 
     def cdf(self, eta):
@@ -118,3 +124,13 @@ def get_link(link: str | Link) -> Link:
         return LINKS[link]
     except KeyError:
         raise ValueError(f"unknown link {link!r}; choose from {sorted(LINKS)}") from None
+
+
+__all__ = [
+    "LINKS",
+    "Cloglog",
+    "Link",
+    "Logit",
+    "Probit",
+    "get_link",
+]

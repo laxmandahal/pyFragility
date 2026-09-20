@@ -58,3 +58,9 @@ def covariance_estimates(
     a_inv = np.linalg.inv(-a)  # covariance under correct specification
     sandwich = a_inv * b * a_inv if legacy_elementwise_sandwich else a_inv @ b @ a_inv
     return CovarianceEstimates(a, b, a_inv, sandwich)
+
+
+__all__ = [
+    "CovarianceEstimates",
+    "covariance_estimates",
+]
