@@ -17,7 +17,8 @@ TOP_LEVEL_API = {
     "CollapseData", "FragilityFit", "GLMProbitClass", "HazardCurve", "Likelihood",
     "LognormalFragility", "MaximumLikelihoodMethod", "compare_models", "expected_annual_loss",
     "fit_binomial", "fit_cloud", "fit_damage_states", "fit_damage_states_independent",
-    "fit_field_data", "fit_ida", "fit_likelihood", "fit_msa", "fragility_json",
+    "fit_field_data", "fit_ida", "fit_isotonic", "fit_likelihood", "fit_msa", "fit_spline",
+    "fragility_json",
     "fragility_table", "frequency_uncertainty", "independent_priors", "likelihood_ratio_test",
     "mean_annual_frequency", "plot_fit", "probability_in_period", "vulnerability",
 }  # fmt: skip
@@ -29,7 +30,7 @@ MODULE_API = {
         "BetaBinomialGLM", "BinomialGLM", "BinomialLognormal", "fit_binomial", "fit_field_data",
         "fit_msa",
     },
-    "capacity": {"LognormalCapacity", "fit_ida"},
+    "capacity": {"LognormalCapacity", "ParametricCapacity", "fit_ida"},
     "cloud": {"CloudRegression", "fit_cloud"},
     "data": {"CollapseData"},
     "datasets": {"MSADataset", "load_msa_wood_frame"},
@@ -43,20 +44,25 @@ MODULE_API = {
     "inference": {
         "BootstrapResult", "GoodnessOfFit", "TestResult", "bootstrap", "compare_models",
         "goodness_of_fit", "information_matrix_test", "likelihood_ratio_test",
-        "profile_likelihood_interval",
+        "monotone_lack_of_fit_test", "profile_likelihood_interval",
     },
     "likelihood": {"hessian", "log_likelihood", "score", "score_by_level"},
-    "links": {"LINKS", "Cloglog", "Link", "Logit", "Probit", "get_link"},
+    "links": {"LINKS", "Cloglog", "Link", "Loglog", "Logit", "Probit", "get_link"},
     "mle": {"MLEResult", "fit_mle"},
+    "nonparametric": {
+        "IsotonicFragility", "SplineBinomialGLM", "curve_distance", "fit_isotonic", "fit_spline",
+        "is_monotone",
+    },
     "ordinal": {
         "DamageStateFits", "OrdinalGLM", "fit_damage_states", "fit_damage_states_independent",
     },
     "plotting": {
-        "plot_confidence_band", "plot_fit", "plot_fragility", "plot_parameter_distribution",
+        "plot_confidence_band", "plot_curves", "plot_fit", "plot_fragility",
+        "plot_parameter_distribution",
     },
     "risk": {
         "CollapseRateSimulation", "FrequencyUncertainty", "HazardCurve",
-        "collapse_frequency_std", "default_im_grid", "expected_annual_loss",
+        "collapse_frequency_std", "compare_risk", "default_im_grid", "expected_annual_loss",
         "frequency_uncertainty", "mean_annual_collapse_frequency", "mean_annual_frequency",
         "probability_in_period", "probability_of_collapse_in_years", "simulate_collapse_rate",
         "vulnerability",

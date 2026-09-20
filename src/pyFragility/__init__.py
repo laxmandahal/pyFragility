@@ -23,6 +23,7 @@ from pyFragility import (  # noqa: F401
     likelihood,
     links,
     mle,
+    nonparametric,
     ordinal,
     plotting,
     risk,
@@ -41,6 +42,7 @@ from pyFragility.fragility import LognormalFragility
 from pyFragility.GLMClass import GLMProbitClass  # noqa: E402
 from pyFragility.inference import compare_models, likelihood_ratio_test
 from pyFragility.MLEClass import MaximumLikelihoodMethod  # noqa: E402
+from pyFragility.nonparametric import fit_isotonic, fit_spline
 from pyFragility.ordinal import fit_damage_states, fit_damage_states_independent
 from pyFragility.plotting import plot_fit
 from pyFragility.risk import (
@@ -70,8 +72,10 @@ __all__ = [
     "fit_damage_states_independent",
     "fit_field_data",
     "fit_ida",
+    "fit_isotonic",
     "fit_likelihood",
     "fit_msa",
+    "fit_spline",
     "fragility_json",
     "fragility_table",
     "frequency_uncertainty",

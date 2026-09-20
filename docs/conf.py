@@ -1,6 +1,11 @@
 """Sphinx configuration for the pyFragility documentation."""
 
 import importlib.metadata
+import os
+
+# Executed notebook cells run in a kernel that inherits this environment: use the inline backend
+# so figures are embedded whatever MPLBACKEND the calling environment (e.g. CI) sets.
+os.environ["MPLBACKEND"] = "module://matplotlib_inline.backend_inline"
 
 project = "pyFragility"
 author = "Laxman Dahal"

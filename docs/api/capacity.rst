@@ -11,3 +11,4 @@ Classes
    :nosignatures:
 
    LognormalCapacity
+   ParametricCapacity

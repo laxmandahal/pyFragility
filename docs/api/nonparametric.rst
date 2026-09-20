@@ -1,7 +1,7 @@
-Link functions
-==============
+Flexible baselines
+==================
 
-.. currentmodule:: pyFragility.links
+.. currentmodule:: pyFragility.nonparametric
 
 Functions
 ---------
@@ -10,8 +10,8 @@ Functions
    :toctree: generated/
    :nosignatures:
 
-   LINKS
-   get_link
+   curve_distance
+   is_monotone
 
 Classes
 -------
@@ -20,8 +20,5 @@ Classes
    :toctree: generated/
    :nosignatures:
 
-   Cloglog
-   Link
-   Logit
-   Loglog
-   Probit
+   IsotonicFragility
+   SplineBinomialGLM

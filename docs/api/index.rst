@@ -19,6 +19,7 @@ submodules, reached as ``pf.inference.bootstrap``, ``pf.risk.HazardCurve`` and s
    engine
    links
    datasets
+   nonparametric
    plotting
    fragility
    mle
@@ -49,6 +50,8 @@ submodules, reached as ``pf.inference.bootstrap``, ``pf.risk.HazardCurve`` and s
      - Probit, logit and complementary log-log links
    * - :doc:`datasets`
      - The paper's example data
+   * - :doc:`nonparametric`
+     - Isotonic and spline baselines, curve distances
    * - :doc:`plotting`
      - Plot functions
    * - :doc:`fragility`, :doc:`mle`, :doc:`glm`, :doc:`variance`, :doc:`likelihood`

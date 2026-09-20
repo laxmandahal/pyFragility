@@ -98,7 +98,7 @@ class BinomialGLM(_BinomialBase):
         Number of exceedances in each row.
     n : array_like of shape (m,)
         Number of records in each row (``1`` for individual structures).
-    link : {"probit", "logit", "cloglog"} or Link, default "probit"
+    link : {"probit", "logit", "cloglog", "loglog"} or Link, default "probit"
         Link function.
     log_im : bool or sequence of bool, default True
         Whether each intensity measure enters as its logarithm.
@@ -514,9 +514,10 @@ def fit_binomial(
         Number of exceedances (e.g. collapses, or damaged structures) in each row.
     num_total : array_like of shape (m,)
         Number of records in each row (``1`` for individual structures).
-    link : {"probit", "logit", "cloglog"} or Link, default "probit"
-        Probit gives a lognormal fragility, logit a log-logistic one, and complementary log-log an
-        asymmetric (Gumbel-type) curve.
+    link : {"probit", "logit", "cloglog", "loglog"} or Link, default "probit"
+        Probit gives a lognormal fragility, logit a log-logistic one, and complementary log-log a
+        Weibull one (``P = 1 - exp(-(im / scale) ** shape)``); log-log is its mirror image, rising
+        fast and saturating slowly.
     overdispersion : bool, default False
         Fit a beta-binomial instead of a binomial (extra-binomial variation between rows).
     log_im : bool or sequence of bool, default True

@@ -7,10 +7,12 @@ a cubic-spline interpolation of ``data.annual_rate``.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
+import pandas as pd
 from numpy.typing import ArrayLike, NDArray
 from scipy.interpolate import CubicSpline
 from scipy.stats import norm
@@ -420,6 +422,71 @@ def mean_annual_frequency(
     return mean_annual_collapse_frequency(prob, hazard, im_grid)
 
 
+def compare_risk(
+    fragilities: Mapping[str, Any],
+    hazard: HazardCurve | CollapseData,
+    *,
+    reference: str | None = None,
+    period: float = 50.0,
+    im_grid: ArrayLike | None = None,
+) -> pd.DataFrame:
+    """Mean annual frequency of exceedance under several fragility models.
+
+    Comparing a parametric fit with a flexible baseline (e.g. an isotonic fit) shows how much
+    the assumed distribution shape matters for *risk*, not just for the curve.
+
+    Parameters
+    ----------
+    fragilities : mapping of str to fragility
+        Fitted models, :class:`~pyFragility.LognormalFragility`, isotonic fits, or any callable
+        ``im -> probability``.
+    hazard : HazardCurve or CollapseData
+        The ground-motion hazard curve.
+    reference : str, optional
+        Name of the model the others are compared with; default the first.
+    period : float, default 50
+        Period in years for the exceedance probability column.
+    im_grid : array_like, optional
+        Intensity grid for the Riemann sum.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per model with the mean annual frequency ``mafc``, its ``difference`` and
+        ``ratio`` to the reference, and the ``probability`` of exceedance within ``period``
+        years.
+
+    Raises
+    ------
+    KeyError
+        If ``reference`` is not one of the models.
+
+    Examples
+    --------
+    >>> import pyFragility as pf
+    >>> ds = pf.datasets.load_msa_wood_frame()
+    >>> counts = ds.counts["B2-Existing"]
+    >>> fits = {
+    ...     "lognormal": pf.fit_msa(ds.im, counts, [45] * 16),
+    ...     "isotonic": pf.fit_isotonic(ds.im, counts, [45] * 16),
+    ... }
+    >>> table = pf.risk.compare_risk(fits, ds.hazard)
+    >>> table["ratio"].round(2)
+    lognormal    1.00
+    isotonic     1.04
+    Name: ratio, dtype: float64
+    """
+    rates = {name: mean_annual_frequency(f, hazard, im_grid) for name, f in fragilities.items()}
+    ref = next(iter(rates)) if reference is None else reference
+    if ref not in rates:
+        raise KeyError(ref)
+    frame = pd.DataFrame({"mafc": pd.Series(rates)})
+    frame["difference"] = frame["mafc"] - rates[ref]
+    frame["ratio"] = frame["mafc"] / rates[ref]
+    frame["probability"] = probability_in_period(frame["mafc"].to_numpy(), period)
+    return frame
+
+
 _FREQUENCY_METHODS = ("simulation", "delta", "paper")
 
 
@@ -600,6 +667,7 @@ __all__ = [
     "FrequencyUncertainty",
     "HazardCurve",
     "collapse_frequency_std",
+    "compare_risk",
     "default_im_grid",
     "expected_annual_loss",
     "frequency_uncertainty",

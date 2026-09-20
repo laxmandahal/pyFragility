@@ -20,7 +20,8 @@ where the *link* $F$ decides the curve shape:
 | --- | --- | --- |
 | `"probit"` (default) | $\Phi(\eta)$ | lognormal: $\Phi\big(\ln(\mathrm{im}/\theta)/\beta\big)$ |
 | `"logit"` | $1/(1+e^{-\eta})$ | log-logistic; slightly heavier tails |
-| `"cloglog"` | $1 - \exp(-e^{\eta})$ | asymmetric (Gumbel-type): slow rise, fast saturation |
+| `"cloglog"` | $1 - \exp(-e^{\eta})$ | Weibull: $1-\exp(-(\mathrm{im}/\text{scale})^{\text{shape}})$; slow rise, fast saturation |
+| `"loglog"` | $\exp(-e^{-\eta})$ | mirror image of cloglog: fast rise, slow saturation |
 
 With a probit link the two parameterisations are equivalent, $\beta_1 = 1/\beta$ and
 $\beta_0 = -\ln\theta/\beta$. `fit_msa` reports $(\theta, \beta)$; `parametrization="glm"`
@@ -88,5 +89,5 @@ binomial sits on the edge of the beta-binomial parameter space.
   a lognormal fragility with median $\exp((\ln c - a)/b)$ and dispersion $\sigma/b$.
   With collapse flags the total probability is $P_c + (1-P_c)\,P(\mathrm{EDP}>c \mid \text{no collapse})$.
 
-Other distributions (Weibull, log-logistic, normal capacity) and monotone or spline
-nonparametric curves are on the roadmap; see the {doc}`../changelog`.
+More distributions (Weibull, log-logistic, Gumbel and normal capacities, other cloud residuals, further
+links) and model-free reference curves are described in {doc}`distributions`.
