@@ -13,15 +13,37 @@ from pyFragility.engine import FragilityFit, Likelihood, fit_likelihood, resampl
 
 
 class CloudRegression(Likelihood):
-    """``ln EDP = a + b ln im + sigma * eps``; exceedance is ``P(EDP > threshold | im)``.
+    """Cloud analysis: ``ln EDP = a + b ln im + sigma * eps``, exceedance ``P(EDP > c | im)``.
 
     With ``collapse`` flags the model is the "modified cloud": records that collapsed carry no
-    usable EDP, collapse probability is a probit regression ``Phi(g0 + g1 ln im)``, and
-    ``P(EDP > c) = Pc + (1 - Pc) * P(EDP > c | no collapse)``. The likelihood factorises, so
-    all parameters are estimated jointly and the sandwich covariance covers both parts.
+    usable EDP, the collapse probability is a probit regression ``Phi(g0 + g1 ln im)``, and
+    ``P(EDP > c) = Pc + (1 - Pc) P(EDP > c | no collapse)``. The likelihood factorises, so all
+    parameters are estimated jointly and the sandwich covariance covers both parts.
 
-    The threshold is only used to evaluate the curve, so one fit serves every limit state:
-    pass ``threshold=`` to :meth:`FragilityFit.probability` to override the default.
+    The threshold only enters the curve, so one fit serves every limit state: pass ``threshold=`` to
+    :meth:`~pyFragility.FragilityFit.probability` to override the default.
+
+    Parameters
+    ----------
+    im : array_like of shape (m,)
+        Positive intensity of each record.
+    edp : array_like of shape (m,)
+        Engineering demand parameter of each record (ignored where ``collapse`` is true).
+    threshold : float, optional
+        Default EDP limit-state value.
+    collapse : array_like of bool, optional
+        ``True`` for records that collapsed.
+    cluster : array_like, optional
+        Cluster label per record.
+
+    Raises
+    ------
+    ValueError
+        For mismatched or non-positive inputs, or fewer than four records with a usable EDP.
+
+    See Also
+    --------
+    fit_cloud : Convenience function that builds and fits this model.
     """
 
     model_name = "cloud regression"
@@ -153,16 +175,52 @@ def fit_cloud(
     collapse: ArrayLike | None = None,
     cluster: ArrayLike | None = None,
 ) -> FragilityFit:
-    """Cloud analysis of ``(im, edp)`` pairs (unscaled records).
+    """Cloud analysis of ``(im, edp)`` pairs from unscaled records.
 
     Parameters
     ----------
-    threshold
-        EDP limit-state value. It only affects the curve, so it can also be given (or changed)
-        when calling ``fit.probability(im, threshold=...)``.
-    collapse
-        Optional boolean flags for records that collapsed (their ``edp`` is ignored). Enables the
-        modified cloud, which combines collapse and non-collapse cases.
+    im : array_like of shape (m,)
+        Intensity of each record.
+    edp : array_like of shape (m,)
+        Engineering demand parameter of each record (ignored for collapsed records).
+    threshold : float, optional
+        EDP limit-state value. It only affects the curve, so it can also be given (or changed) when
+        calling ``fit.probability(im, threshold=...)``.
+    collapse : array_like of bool, optional
+        Flags for records that collapsed. Enables the modified cloud, which combines collapse and
+        non-collapse cases.
+    cluster : array_like, optional
+        Cluster label per record.
+
+    Returns
+    -------
+    FragilityFit
+        Parameters ``a``, ``b``, ``sigma`` (plus ``gamma0``, ``gamma1`` with collapse flags). For
+        the plain cloud, :meth:`~pyFragility.FragilityFit.lognormal_parameters` gives the median
+        ``exp((ln c - a) / b)`` and dispersion ``sigma / b`` for a threshold ``c``.
+
+    See Also
+    --------
+    fit_ida : Capacity data from incremental dynamic analysis.
+
+    Examples
+    --------
+    >>> import pyFragility as pf
+    >>> im = [0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0, 1.2, 1.5, 1.8, 2.2, 2.6]
+    >>> edp = [0.001, 0.0018, 0.002, 0.004, 0.0035, 0.007, 0.006, 0.014, 0.012,
+    ...        0.03, 0.025, 0.05, 0.04, 0.09]
+    >>> fit = pf.fit_cloud(im, edp, threshold=0.02)
+    >>> fit.param_names
+    ('a', 'b', 'sigma')
+    >>> summary = fit.lognormal_parameters("mle")
+    >>> round(summary.theta, 3), round(summary.beta, 3)
+    (1.113, 0.198)
+
+    The same fit answers other limit states:
+
+    >>> summary = fit.lognormal_parameters("mle", threshold=0.05)
+    >>> round(summary.theta, 3)
+    2.232
     """
     return fit_likelihood(CloudRegression(im, edp, threshold, collapse, cluster=cluster))
 

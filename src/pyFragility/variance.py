@@ -20,7 +20,19 @@ from pyFragility.likelihood import hessian, score_by_level
 
 @dataclass(frozen=True)
 class CovarianceEstimates:
-    """Covariances of ``(theta, beta)`` at a fitted fragility."""
+    """Covariances of ``(theta, beta)`` at a fitted fragility, from the Hessian and score products.
+
+    Attributes
+    ----------
+    hessian : ndarray
+        ``A``: Hessian of the log-likelihood (paper Eq. 18a).
+    outer_product : ndarray
+        ``B``: sum of per-level score outer products (paper Eq. 18b).
+    mle_cov : ndarray
+        ``(-A)^-1``: covariance assuming the probability model is correct.
+    sandwich_cov : ndarray
+        ``A^-1 B A^-1``: Huber-White covariance robust to misspecification.
+    """
 
     hessian: NDArray[np.float64]
     """``A``: Hessian of the log-likelihood (paper Eq. 18a)."""
@@ -43,14 +55,25 @@ def covariance_estimates(
     *,
     legacy_elementwise_sandwich: bool = False,
 ) -> CovarianceEstimates:
-    """Compute ``A``, ``B``, the MLE covariance and the sandwich covariance.
+    """Compute ``A``, ``B``, the MLE covariance and the sandwich covariance of a fragility.
+
+    Reference implementation of the paper; :meth:`FragilityFit.covariance_estimates` gives the same
+    for any fitted model.
 
     Parameters
     ----------
-    legacy_elementwise_sandwich
-        Version 0.0.1 formed the sandwich as the *elementwise* product ``A^-1 * B * A^-1``,
-        and the paper's Appendix B and Fig. 5 were produced that way. Set this to ``True`` to
-        reproduce those numbers; the default is the matrix product.
+    data : CollapseData
+        Stripe counts.
+    fragility : LognormalFragility
+        Fitted median and dispersion.
+    legacy_elementwise_sandwich : bool, default False
+        Version 0.0.1 formed the sandwich as the *elementwise* product ``A^-1 * B * A^-1``, and the
+        paper's Appendix B and Fig. 5 were produced that way. Set ``True`` to reproduce those
+        numbers; the default is the matrix product.
+
+    Returns
+    -------
+    CovarianceEstimates
     """
     a = hessian(data, fragility.theta, fragility.beta)
     s = score_by_level(data, fragility.theta, fragility.beta)

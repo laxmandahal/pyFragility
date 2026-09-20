@@ -17,6 +17,20 @@ CovType = Literal["nonrobust", "expected_hessian", "observed_hessian"]
 
 @dataclass(frozen=True)
 class ProbitGLMResult:
+    """Result of :func:`fit_probit_glm`.
+
+    Attributes
+    ----------
+    fragility : ProbitFragility
+        Estimated ``(beta0, beta1)``.
+    cov : ndarray of shape (2, 2)
+        Covariance of the parameters for the requested ``cov_type``.
+    cov_type : str
+        Covariance type used.
+    sm_result : object
+        The underlying statsmodels results object.
+    """
+
     fragility: ProbitFragility
     cov: NDArray[np.float64]
     """Covariance of ``(beta0, beta1)`` for the requested ``cov_type``."""
@@ -26,14 +40,33 @@ class ProbitGLMResult:
 
 
 def fit_probit_glm(data: CollapseData, cov_type: CovType = "nonrobust") -> ProbitGLMResult:
-    """Fit ``P(C | im) = Phi(beta0 + beta1 ln im)`` as a binomial GLM with probit link.
+    """Fit ``P(C | im) = Phi(beta0 + beta1 ln im)`` as a probit binomial GLM (statsmodels).
 
     Parameters
     ----------
-    cov_type
-        ``"nonrobust"`` is the inverse Fisher information (matches R's ``glm``);
-        ``"expected_hessian"`` and ``"observed_hessian"`` give Huber-White (HC0) sandwich
-        covariances using the expected/observed Hessian as the bread.
+    data : CollapseData
+        Stripe counts.
+    cov_type : {"nonrobust", "expected_hessian", "observed_hessian"}, default "nonrobust"
+        ``"nonrobust"`` is the inverse Fisher information (matches R's ``glm``); the other two give
+        Huber-White sandwich (HC0) covariances.
+
+    Returns
+    -------
+    ProbitGLMResult
+
+    Raises
+    ------
+    ValueError
+        For an unknown ``cov_type``.
+
+    Notes
+    -----
+    statsmodels' HC0 covariance uses the observed Hessian regardless of ``optim_hessian``, so the
+    two sandwich options give the same covariance.
+
+    See Also
+    --------
+    pyFragility.fit_msa : The general interface (``parametrization="glm"``).
     """
     endog = np.column_stack([data.collapse_count, data.num_gm - data.collapse_count])
     exog = sm.add_constant(data.log_im)
