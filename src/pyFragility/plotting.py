@@ -31,7 +31,27 @@ def plot_fragility(
     ax: Axes | None = None,
     im_grid: ArrayLike | None = None,
 ) -> Axes:
-    """Fitted fragility curve with the observed collapse fractions."""
+    """Fitted fragility curve with the observed collapse fractions (paper-era function).
+
+    Parameters
+    ----------
+    data : CollapseData
+        Stripe counts.
+    fragility : LognormalFragility or ProbitFragility
+        Fitted curve.
+    ax : matplotlib.axes.Axes, optional
+        Axes to draw on; a new figure is created if omitted.
+    im_grid : array_like, optional
+        Intensity grid for the curve.
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+
+    See Also
+    --------
+    plot_fit : The general function for any fit.
+    """
     ax = _axes(ax)
     grid = default_im_grid(data) if im_grid is None else np.asarray(im_grid, dtype=float)
     ax.plot(grid, fragility.probability(grid), color="red", label="Fitted fragility")
@@ -58,7 +78,31 @@ def plot_confidence_band(
     ax: Axes | None = None,
     im_grid: ArrayLike | None = None,
 ) -> Axes:
-    """Median fragility with a pointwise confidence band from the ``(beta0, beta1)`` covariance."""
+    """Median fragility with a pointwise confidence band from the ``(beta0, beta1)`` covariance.
+
+    Parameters
+    ----------
+    data : CollapseData
+        Stripe counts.
+    fragility : ProbitFragility
+        Fitted curve.
+    cov : array_like of shape (2, 2)
+        Covariance of ``(beta0, beta1)``.
+    level : float, default 0.95
+        Confidence level.
+    ax : matplotlib.axes.Axes, optional
+        Axes to draw on.
+    im_grid : array_like, optional
+        Intensity grid.
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+
+    See Also
+    --------
+    plot_fit : The general function (``band=`` selects the covariance).
+    """
     ax = _axes(ax)
     grid = default_im_grid(data) if im_grid is None else np.asarray(im_grid, dtype=float)
     c = np.asarray(cov, dtype=float)
@@ -91,7 +135,23 @@ def plot_confidence_band(
 def plot_parameter_distribution(
     mean: float, variance: float, label: str = "", ax: Axes | None = None, seed: int = 42
 ) -> Axes:
-    """Histogram of normal draws with the analytical normal density overlaid."""
+    """Histogram of normal draws with the analytical normal density overlaid.
+
+    Parameters
+    ----------
+    mean, variance : float
+        Mean and variance of the (asymptotic) parameter distribution.
+    label : str, optional
+        Parameter name for the title.
+    ax : matplotlib.axes.Axes, optional
+        Axes to draw on.
+    seed : int, default 42
+        Seed of the random number generator.
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+    """
     ax = _axes(ax)
     sd = np.sqrt(variance)
     sample = np.random.RandomState(seed).normal(mean, sd, 10000)
@@ -114,11 +174,32 @@ def plot_fit(
 
     Parameters
     ----------
-    band
-        ``None`` for no band, a covariance name (``"mle"``, ``"expected"``, ``"sandwich"``), or
-        ``"both"`` to overlay the MLE and sandwich bands.
+    fit : FragilityFit
+        The fitted model.
+    im_grid : array_like, optional
+        Intensity grid; by default 400 points up to 1.25 times the largest observed intensity.
+    band : {"sandwich", "mle", "expected", "both"} or None, default "sandwich"
+        Covariance for the confidence band: a covariance name, ``"both"`` to overlay the MLE and
+        sandwich bands, or ``None`` for no band.
+    level : float, default 0.95
+        Confidence level of the band.
+    ax : matplotlib.axes.Axes, optional
+        Axes to draw on; a new figure is created if omitted.
     **kwargs
         Passed to ``fit.probability`` (e.g. ``state=2`` or ``threshold=0.02``).
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+
+    Examples
+    --------
+    >>> import pyFragility as pf
+    >>> ds = pf.datasets.load_msa_wood_frame()
+    >>> fit = pf.fit_msa(ds.im, ds.counts["B2-Existing"], [ds.num_gm] * 16)
+    >>> ax = pf.plot_fit(fit, band="both")
+    >>> ax.get_xlabel()
+    'Intensity measure'
     """
     ax = _axes(ax)
     obs = fit.likelihood.observed()

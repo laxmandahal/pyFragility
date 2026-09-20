@@ -11,3 +11,6 @@ dist/
 .coverage
 coverage.xml
 htmlcov/
+docs/_build/
+docs/api/generated/
+docs/.jupyter_cache/

@@ -22,7 +22,33 @@ from pyFragility.fragility import ProbitFragility
 
 @dataclass(frozen=True)
 class HazardCurve:
-    """Ground-motion hazard: mean annual frequency of exceedance ``annual_rate`` of each ``im``."""
+    """Ground-motion hazard: mean annual frequency of exceedance of each intensity.
+
+    The frequency between the tabulated intensities is interpolated with a cubic spline when a
+    fragility is integrated against the curve.
+
+    Parameters
+    ----------
+    im : array_like of shape (m,)
+        Strictly increasing intensities (at least three).
+    annual_rate : array_like of shape (m,)
+        Positive mean annual frequency of exceeding each ``im``, i.e. ``1 / return period``.
+
+    Attributes
+    ----------
+    im, annual_rate : ndarray
+        The validated inputs.
+
+    Raises
+    ------
+    ValueError
+        If the arrays differ in length, are shorter than three, ``im`` is not strictly increasing
+        or a rate is not positive.
+
+    See Also
+    --------
+    mean_annual_frequency : Integrate a fragility against the hazard.
+    """
 
     im: NDArray[np.float64]
     annual_rate: NDArray[np.float64]
@@ -38,9 +64,35 @@ class HazardCurve:
 
     @classmethod
     def from_return_periods(cls, im: ArrayLike, return_periods: ArrayLike) -> HazardCurve:
+        """Build the hazard from return periods.
+
+        Parameters
+        ----------
+        im : array_like
+            Strictly increasing intensities.
+        return_periods : array_like
+            Return period in years of each intensity; the rate is ``1 / return_period``.
+
+        Returns
+        -------
+        HazardCurve
+
+        Examples
+        --------
+        >>> import pyFragility as pf
+        >>> hz = pf.HazardCurve.from_return_periods([0.2, 0.5, 1.0], [50, 500, 5000])
+        >>> hz.annual_rate
+        array([0.02  , 0.002 , 0.0002])
+        """
         return cls(im, 1.0 / np.asarray(return_periods, dtype=float))
 
     def require_annual_rate(self) -> NDArray[np.float64]:
+        """The annual rates (also lets a ``HazardCurve`` stand in for a ``CollapseData``).
+
+        Returns
+        -------
+        ndarray
+        """
         return self.annual_rate
 
 
@@ -51,7 +103,26 @@ def _hazard(source) -> HazardCurve | CollapseData:
 
 
 def default_im_grid(data: CollapseData | HazardCurve, num: int = 500) -> NDArray[np.float64]:
-    """Grid from 0.01 to ``int(max(im)) + 1``, as used in the paper."""
+    """Intensity grid used for the Riemann sum, as in the paper.
+
+    Parameters
+    ----------
+    data : CollapseData or HazardCurve
+        Provides the largest intensity.
+    num : int, default 500
+        Number of grid points.
+
+    Returns
+    -------
+    ndarray
+        ``linspace(0.01, int(max(im)) + 1, num)``.
+
+    Notes
+    -----
+    The grid extends to ``int(max(im)) + 1``, beyond the last tabulated intensity when that is not
+    an integer, so the spline interpolating the hazard extrapolates there. This matches the paper;
+    pass ``im_grid=`` to the risk functions to restrict the integral to the tabulated range.
+    """
     return np.linspace(0.01, int(data.im.max()) + 1, num)
 
 
@@ -66,7 +137,26 @@ def mean_annual_collapse_frequency(
     data: CollapseData,
     im_grid: ArrayLike | None = None,
 ) -> float:
-    """MAFC of a fragility given as a callable ``im -> P(collapse | im)``."""
+    """Mean annual frequency of collapse of a fragility given as a callable (paper-era function).
+
+    Parameters
+    ----------
+    probability : callable
+        ``probability(im) -> P(collapse | im)``.
+    data : CollapseData or HazardCurve
+        Provides the hazard curve.
+    im_grid : array_like, optional
+        Intensity grid (default :func:`default_im_grid`).
+
+    Returns
+    -------
+    float
+        ``sum_i P(C | im_i) |lambda(im_i) - lambda(im_{i+1})|`` over grid midpoints (paper Eq. 11).
+
+    See Also
+    --------
+    mean_annual_frequency : The general function, which also accepts fitted models.
+    """
     grid = default_im_grid(data) if im_grid is None else np.asarray(im_grid, dtype=float)
     mids, _, d_lam = _increments(data, grid)
     return float(np.sum(np.asarray(probability(mids)) * d_lam))
@@ -80,8 +170,27 @@ def collapse_frequency_std(
 ) -> float:
     """Standard deviation of the MAFC from the covariance of ``(beta0, beta1)`` (paper Eq. 12).
 
-    Uses the first-order (delta-method) variance of ``P(C | im)`` at each grid point and
-    assumes it is fully correlated across the grid.
+    Uses the first-order (delta-method) variance of ``P(C | im)`` at each grid point and assumes it
+    is fully correlated across the grid, which is conservative.
+
+    Parameters
+    ----------
+    fragility : ProbitFragility
+        Fitted probit parameters.
+    cov : array_like of shape (2, 2)
+        Their covariance.
+    data : CollapseData or HazardCurve
+        Provides the hazard curve.
+    im_grid : array_like, optional
+        Intensity grid.
+
+    Returns
+    -------
+    float
+
+    See Also
+    --------
+    frequency_uncertainty : The general function (``method="paper"`` gives this value).
     """
     grid = default_im_grid(data) if im_grid is None else np.asarray(im_grid, dtype=float)
     _, _, d_lam = _increments(data, grid)
@@ -95,7 +204,26 @@ def collapse_frequency_std(
 
 
 def probability_in_period(rate: ArrayLike, years: float) -> NDArray[np.float64]:
-    """Probability of at least one exceedance in ``years`` years: ``1 - exp(-years * rate)``."""
+    """Probability of at least one exceedance in a period, for a Poisson process.
+
+    Parameters
+    ----------
+    rate : array_like
+        Mean annual frequency.
+    years : float
+        Length of the period in years.
+
+    Returns
+    -------
+    ndarray
+        ``1 - exp(-years * rate)``.
+
+    Examples
+    --------
+    >>> import pyFragility as pf
+    >>> round(float(pf.probability_in_period(0.002, 50)), 4)
+    0.0952
+    """
     return 1.0 - np.exp(-years * np.asarray(rate, dtype=float))
 
 
@@ -104,7 +232,17 @@ probability_of_collapse_in_years = probability_in_period  # name used by the pap
 
 @dataclass(frozen=True)
 class CollapseRateSimulation:
-    """Monte-Carlo draws of the MAFC and the collapse probability over ``period`` years."""
+    """Monte-Carlo draws of the MAFC and collapse probability (paper-era result type).
+
+    Attributes
+    ----------
+    rates : ndarray
+        Mean annual collapse frequency of each draw.
+    probabilities : ndarray
+        Collapse probability over ``period`` years for each draw.
+    period : float
+        Period in years.
+    """
 
     rates: NDArray[np.float64]
     probabilities: NDArray[np.float64]
@@ -112,10 +250,12 @@ class CollapseRateSimulation:
 
     @property
     def rate_variance(self) -> float:
+        """Variance of the simulated annual collapse frequencies."""
         return float(np.var(self.rates))
 
     @property
     def probability_variance(self) -> float:
+        """Variance of the simulated collapse probabilities over the period."""
         return float(np.var(self.probabilities))
 
 
@@ -131,8 +271,33 @@ def simulate_collapse_rate(
 ) -> CollapseRateSimulation:
     """Propagate parameter uncertainty to the MAFC by sampling ``(beta0, beta1)``.
 
-    Draws are ``N((beta0, beta1), cov)``. ``RandomState`` is used (rather than ``Generator``)
-    so seeded results match those of earlier releases.
+    Draws are ``N((beta0, beta1), cov)``. ``RandomState`` is used (rather than ``Generator``) so
+    seeded results match those of earlier releases.
+
+    Parameters
+    ----------
+    fragility : ProbitFragility
+        Fitted probit parameters.
+    cov : array_like of shape (2, 2)
+        Their covariance.
+    data : CollapseData or HazardCurve
+        Provides the hazard curve.
+    num_samples : int, default 500
+        Number of draws.
+    period : float, default 50
+        Period in years for the collapse probability.
+    seed : int, default 42
+        Seed of the random number generator.
+    im_grid : array_like, optional
+        Intensity grid.
+
+    Returns
+    -------
+    CollapseRateSimulation
+
+    See Also
+    --------
+    frequency_uncertainty : The general function.
     """
     grid = default_im_grid(data) if im_grid is None else np.asarray(im_grid, dtype=float)
     mids, _, d_lam = _increments(data, grid)
@@ -147,8 +312,20 @@ def simulate_collapse_rate(
 class FrequencyUncertainty:
     """Mean annual frequency of exceedance and its uncertainty due to the fitted parameters.
 
-    ``rates`` holds one frequency per parameter draw (``method="simulation"`` or supplied
-    ``draws``); with an analytic method only ``mean`` and ``std`` are available.
+    Returned by :func:`frequency_uncertainty`. ``rates`` holds one frequency per parameter draw
+    (``method="simulation"`` or supplied ``draws``); with an analytic method only ``mean`` and
+    ``std`` are available.
+
+    Attributes
+    ----------
+    mean : float
+        Frequency at the point estimates.
+    std : float
+        Standard deviation due to parameter uncertainty.
+    period : float
+        Period (years) used for :attr:`probabilities`.
+    rates : ndarray or None
+        Frequency of each parameter draw.
     """
 
     mean: float
@@ -163,13 +340,30 @@ class FrequencyUncertainty:
 
     @property
     def probabilities(self) -> NDArray[np.float64]:
-        """Probability of at least one exceedance within ``period`` years, per draw."""
+        """Probability of at least one exceedance within ``period`` years, per draw.
+
+        Raises
+        ------
+        ValueError
+            If no per-draw values exist (analytic methods).
+        """
         if self.rates is None:
             raise ValueError("per-draw values exist only for method='simulation' or draws=")
         return probability_in_period(self.rates, self.period)
 
     def interval(self, level: float = 0.95) -> tuple[float, float]:
-        """Percentile interval of the draws (normal approximation for analytic methods)."""
+        """Confidence interval of the frequency.
+
+        Parameters
+        ----------
+        level : float, default 0.95
+            Confidence level.
+
+        Returns
+        -------
+        lower, upper : float
+            Percentile interval of the draws (normal approximation for analytic methods).
+        """
         if self.rates is None:
             z = norm.ppf(0.5 + level / 2)
             return self.mean - z * self.std, self.mean + z * self.std
@@ -185,9 +379,40 @@ def mean_annual_frequency(
 ) -> float:
     """Mean annual frequency of exceeding the limit state (paper Eq. 11).
 
-    ``fragility`` is a fitted :class:`~pyFragility.FragilityFit`, a
-    :class:`~pyFragility.LognormalFragility`, or any callable ``im -> probability``; the
-    fragility is integrated against ``hazard`` with a midpoint Riemann sum.
+    The fragility is integrated against the hazard with a midpoint Riemann sum,
+    ``sum_i P(im_i) |lambda(im_i) - lambda(im_{i+1})|``.
+
+    Parameters
+    ----------
+    fragility : FragilityFit, LognormalFragility or callable
+        A fitted model, a fragility with a ``probability`` method, or any callable
+        ``im -> probability``.
+    hazard : HazardCurve or CollapseData
+        The ground-motion hazard curve.
+    im_grid : array_like, optional
+        Intensity grid for the sum (default :func:`default_im_grid`).
+    **curve_kwargs
+        Passed to the fragility (e.g. ``threshold=`` for a cloud fit, ``state=`` for damage states).
+
+    Returns
+    -------
+    float
+
+    See Also
+    --------
+    frequency_uncertainty : The same with parameter uncertainty.
+    probability_in_period : Convert to a probability over a period.
+
+    Examples
+    --------
+    >>> import pyFragility as pf
+    >>> ds = pf.datasets.load_msa_wood_frame()
+    >>> fit = pf.fit_msa(ds.im, ds.counts["B2-Existing"], [ds.num_gm] * 16)
+    >>> mafc = pf.mean_annual_frequency(fit, ds.hazard)
+    >>> print(f"{mafc:.3e}")
+    9.175e-04
+    >>> round(float(pf.probability_in_period(mafc, 50)), 4)
+    0.0448
     """
     prob = fragility.probability if hasattr(fragility, "probability") else fragility
     if curve_kwargs:
@@ -213,24 +438,56 @@ def frequency_uncertainty(
 ) -> FrequencyUncertainty:
     """Mean annual frequency of exceedance with parameter uncertainty, for any fitted model.
 
+    Comparing ``cov="mle"`` with ``cov="sandwich"`` shows how much probability-model
+    misspecification matters for risk.
+
     Parameters
     ----------
-    fit
-        A :class:`~pyFragility.FragilityFit`.
-    hazard
+    fit : FragilityFit
+        The fitted model.
+    hazard : HazardCurve or CollapseData
         The ground-motion hazard curve.
-    cov
-        Which parameter covariance to propagate: ``"mle"``, ``"expected"`` or ``"sandwich"``
-        (see :meth:`FragilityFit.covariance`). Comparing ``"mle"`` with ``"sandwich"`` shows
-        how much probability-model misspecification matters for risk.
-    method
-        ``"simulation"``: draw parameters from the asymptotic normal distribution (or use
-        ``draws``, e.g. bootstrap or posterior samples) and integrate each curve.
-        ``"delta"``: first-order variance ``g' V g`` of the frequency, ``g`` its gradient with
-        respect to the parameters. ``"paper"``: the paper's Eq. 12, which sums the pointwise
-        standard errors of the fragility assuming they are perfectly correlated (conservative).
-    draws
-        Optional parameter samples, shape ``(n, n_params)``; implies ``method="simulation"``.
+    cov : {"sandwich", "mle", "expected"}, default "sandwich"
+        Parameter covariance to propagate (see :meth:`FragilityFit.covariance`).
+    method : {"simulation", "delta", "paper"}, default "simulation"
+        * ``"simulation"``: draw parameters from the asymptotic normal distribution (or use
+          ``draws``, e.g. bootstrap or posterior samples) and integrate each curve.
+        * ``"delta"``: first-order variance ``g' V g`` of the frequency, ``g`` its gradient with
+          respect to the parameters.
+        * ``"paper"``: the paper's Eq. 12, which sums the pointwise standard errors of the
+          fragility assuming they are perfectly correlated (conservative).
+    draws : array_like of shape (n, n_params), optional
+        Parameter samples; implies ``method="simulation"``.
+    num_samples : int, default 1000
+        Number of draws when simulating.
+    period : float, default 50
+        Period in years for :attr:`FrequencyUncertainty.probabilities`.
+    seed : int or None, default 0
+        Seed of the random number generator.
+    im_grid : array_like, optional
+        Intensity grid for the Riemann sum.
+    **curve_kwargs
+        Passed to the fitted curve (``state=``, ``threshold=``).
+
+    Returns
+    -------
+    FrequencyUncertainty
+
+    Raises
+    ------
+    ValueError
+        For an unknown ``method``.
+
+    Examples
+    --------
+    >>> import pyFragility as pf
+    >>> ds = pf.datasets.load_msa_wood_frame()
+    >>> fit = pf.fit_msa(ds.im, ds.counts["B2-Existing"], [ds.num_gm] * 16)
+    >>> for cov in ("mle", "sandwich"):
+    ...     res = pf.frequency_uncertainty(fit, ds.hazard, cov=cov, method="delta")
+    ...     print(cov, f"{res.mean:.3e}", f"{res.std:.3e}")
+    mle 9.175e-04 1.612e-04
+    sandwich 9.175e-04 1.193e-04
     """
     if method not in _FREQUENCY_METHODS:
         raise ValueError(f"method must be one of {_FREQUENCY_METHODS}")
@@ -258,9 +515,31 @@ def frequency_uncertainty(
 def vulnerability(fit, im: ArrayLike, mean_losses: ArrayLike) -> NDArray[np.float64]:
     """Expected loss ratio ``E[L | im]`` from damage-state fragilities.
 
-    ``fit`` must provide ``probability(im, state=j)`` for ``j = 1..K`` (the result of
-    :func:`~pyFragility.fit_damage_states`); ``mean_losses`` has ``K + 1`` entries, the mean
-    loss ratio in states ``0..K``.
+    Parameters
+    ----------
+    fit : FragilityFit or DamageStateFits
+        Must provide ``probability(im, state=j)`` for ``j = 1..K`` (see
+        :func:`~pyFragility.fit_damage_states`).
+    im : array_like
+        Intensity values.
+    mean_losses : array_like of shape (K + 1,)
+        Mean loss ratio in states ``0..K``.
+
+    Returns
+    -------
+    ndarray
+        ``sum_s P(state = s | im) L_s``; exceedance curves are forced to be non-increasing so
+        crossing curves cannot give negative probabilities.
+
+    Examples
+    --------
+    >>> import pyFragility as pf
+    >>> im = [0.2, 0.4, 0.7, 1.0, 1.5, 2.2]
+    >>> counts = [[38, 2, 0, 0], [30, 8, 2, 0], [18, 14, 7, 1],
+    ...           [8, 14, 13, 5], [2, 9, 16, 13], [0, 3, 12, 25]]
+    >>> fit = pf.fit_damage_states(im, counts=counts)
+    >>> pf.vulnerability(fit, [0.5, 1.0, 2.0], [0.0, 0.05, 0.3, 1.0]).round(3)
+    array([0.049, 0.243, 0.635])
     """
     losses = np.asarray(mean_losses, dtype=float)
     k = losses.size - 1
@@ -279,7 +558,37 @@ def expected_annual_loss(
     mean_losses: ArrayLike,
     im_grid: ArrayLike | None = None,
 ) -> float:
-    """Expected annual loss ratio: the vulnerability function integrated against the hazard."""
+    """Expected annual loss ratio: the vulnerability function integrated against the hazard.
+
+    Parameters
+    ----------
+    fit : FragilityFit or DamageStateFits
+        Damage-state fragilities (see :func:`vulnerability`).
+    hazard : HazardCurve or CollapseData
+        The ground-motion hazard curve.
+    mean_losses : array_like of shape (K + 1,)
+        Mean loss ratio in states ``0..K``.
+    im_grid : array_like, optional
+        Intensity grid for the Riemann sum.
+
+    Returns
+    -------
+    float
+        Expected annual loss as a fraction of replacement value.
+
+    Examples
+    --------
+    >>> import pyFragility as pf
+    >>> im = [0.2, 0.4, 0.7, 1.0, 1.5, 2.2]
+    >>> counts = [[38, 2, 0, 0], [30, 8, 2, 0], [18, 14, 7, 1],
+    ...           [8, 14, 13, 5], [2, 9, 16, 13], [0, 3, 12, 25]]
+    >>> fit = pf.fit_damage_states(im, counts=counts)
+    >>> hz = pf.HazardCurve.from_return_periods([0.1, 0.5, 1, 2, 4], [10, 100, 500, 2500, 10000])
+    >>> import numpy as np
+    >>> eal = pf.expected_annual_loss(fit, hz, [0.0, 0.05, 0.3, 1.0], np.linspace(0.1, 4, 400))
+    >>> print(f"{eal:.4f}")
+    0.0295
+    """
     hz = _hazard(hazard)
     grid = default_im_grid(hz) if im_grid is None else np.asarray(im_grid, dtype=float)
     mids, _, d_lam = _increments(hz, grid)

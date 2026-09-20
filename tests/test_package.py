@@ -32,9 +32,10 @@ MODULE_API = {
     "capacity": {"LognormalCapacity", "fit_ida"},
     "cloud": {"CloudRegression", "fit_cloud"},
     "data": {"CollapseData"},
+    "datasets": {"MSADataset", "load_msa_wood_frame"},
     "engine": {
-        "COVARIANCE_KINDS", "FragilityFit", "Likelihood", "LognormalSummary",
-        "compute_covariances", "fit_likelihood", "resample_indices",
+        "FragilityFit", "Likelihood", "LognormalSummary", "compute_covariances",
+        "fit_likelihood", "resample_indices",
     },
     "export": {"fragility_json", "fragility_table"},
     "fragility": {"LognormalFragility", "ProbitFragility"},

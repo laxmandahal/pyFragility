@@ -15,6 +15,7 @@ from pyFragility import (  # noqa: F401
     binomial,
     capacity,
     cloud,
+    datasets,
     engine,
     export,
     glm,

@@ -24,7 +24,24 @@ from pyFragility.variance import covariance_estimates
 
 
 class MaximumLikelihoodMethod:
-    """MLE lognormal fragility fit with MLE and sandwich covariances (legacy interface)."""
+    """MLE lognormal fragility fit with MLE and sandwich covariances (0.0.x interface).
+
+    .. deprecated:: 0.2.0
+        Use :func:`pyFragility.fit_msa` instead; see :doc:`/guide/migration`.
+
+    Parameters
+    ----------
+    hazardLevel : array_like
+        Intensity of each stripe.
+    collpaseCount : array_like
+        Collapses at each stripe (the misspelling is kept for compatibility).
+    numGM : array_like
+        Ground motions at each stripe.
+    collapseRate : array_like
+        Mean annual frequency of exceedance of each stripe's intensity.
+    legacy_sandwich : bool, default False
+        Use the elementwise product of 0.0.x for the sandwich covariance.
+    """
 
     def __init__(self, hazardLevel, collpaseCount, numGM, collapseRate, legacy_sandwich=False):
         warnings.warn(
@@ -71,7 +88,18 @@ class MaximumLikelihoodMethod:
         self.simulatedCollapseRateCov(self.GLMmodel.vcov)
 
     def MAFC(self, qmleTag=False):
-        """Set ``meanLambdaCollapse``; return the MAFC std (sandwich covariance if ``qmleTag``)."""
+        """Set ``meanLambdaCollapse`` and return the standard deviation of the MAFC.
+
+        Parameters
+        ----------
+        qmleTag : bool, default False
+            Use the sandwich covariance instead of the inverse Fisher information.
+
+        Returns
+        -------
+        float
+            Standard deviation of the mean annual frequency of collapse.
+        """
         self.meanLambdaCollapse = risk.mean_annual_collapse_frequency(
             self._fragility.probability, self.data, self.IMrange
         )

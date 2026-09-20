@@ -12,28 +12,96 @@ from scipy.stats import norm
 
 
 class Link:
-    """Base class of link functions ``F(eta)`` mapping a linear predictor to a probability."""
+    """Base class of link functions ``F(eta)`` mapping a linear predictor to a probability.
+
+    Subclasses provide the CDF and its logarithms, the log-density and the derivative of the
+    log-density, which give analytic scores and Hessians for binomial and ordinal models.
+    """
 
     name: str
 
     def cdf(self, eta):
+        """Probability ``F(eta)``.
+
+        Parameters
+        ----------
+        eta : array_like
+            Linear predictor.
+
+        Returns
+        -------
+        ndarray
+        """
         raise NotImplementedError
 
     def log_cdf(self, eta):
+        """``log F(eta)``, computed stably.
+
+        Parameters
+        ----------
+        eta : array_like
+            Linear predictor.
+
+        Returns
+        -------
+        ndarray
+        """
         raise NotImplementedError
 
     def log_sf(self, eta):
+        """``log (1 - F(eta))``, computed stably.
+
+        Parameters
+        ----------
+        eta : array_like
+            Linear predictor.
+
+        Returns
+        -------
+        ndarray
+        """
         raise NotImplementedError
 
     def log_pdf(self, eta):
+        """``log F'(eta)``, the log-density.
+
+        Parameters
+        ----------
+        eta : array_like
+            Linear predictor.
+
+        Returns
+        -------
+        ndarray
+        """
         raise NotImplementedError
 
     def dlog_pdf(self, eta):
-        """``f'(eta) / f(eta)``."""
+        """``F''(eta) / F'(eta)``.
+
+        Parameters
+        ----------
+        eta : array_like
+            Linear predictor.
+
+        Returns
+        -------
+        ndarray
+        """
         raise NotImplementedError
 
     def ppf(self, p):
-        """Inverse of :meth:`cdf`."""
+        """Inverse of :meth:`cdf`.
+
+        Parameters
+        ----------
+        p : array_like
+            Probabilities.
+
+        Returns
+        -------
+        ndarray
+        """
         raise NotImplementedError
 
 
@@ -86,7 +154,11 @@ class Logit(Link):
 
 
 class Cloglog(Link):
-    """Complementary log-log: ``F(eta) = 1 - exp(-exp(eta))`` (asymmetric, Gumbel-type)."""
+    """Complementary log-log: ``F(eta) = 1 - exp(-exp(eta))``.
+
+    An asymmetric, Gumbel-type link: the curve rises slowly at low intensities and saturates
+    faster, unlike the symmetric probit and logit.
+    """
 
     name = "cloglog"
 
@@ -117,7 +189,28 @@ LINKS: dict[str, Link] = {"probit": Probit(), "logit": Logit(), "cloglog": Clogl
 
 
 def get_link(link: str | Link) -> Link:
-    """Return a :class:`Link` from its name (probit, logit, cloglog) or pass one through."""
+    """Return a :class:`Link` from its name or pass one through.
+
+    Parameters
+    ----------
+    link : {"probit", "logit", "cloglog"} or Link
+        Link name or instance.
+
+    Returns
+    -------
+    Link
+
+    Raises
+    ------
+    ValueError
+        For an unknown name.
+
+    Examples
+    --------
+    >>> import pyFragility as pf
+    >>> float(pf.links.get_link("logit").cdf(0.0))
+    0.5
+    """
     if isinstance(link, Link):
         return link
     try:

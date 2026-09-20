@@ -9,7 +9,7 @@ nbformat = pytest.importorskip("nbformat")
 nbclient = pytest.importorskip("nbclient")
 pytest.importorskip("ipykernel")
 
-EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
+EXAMPLES = Path(__file__).resolve().parents[1] / "docs" / "examples"
 NOTEBOOKS = sorted(EXAMPLES.glob("*.ipynb"))
 
 pytestmark = [pytest.mark.notebooks, pytest.mark.filterwarnings("ignore::DeprecationWarning")]

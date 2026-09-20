@@ -15,6 +15,18 @@ from pyFragility.likelihood import log_likelihood, score
 
 @dataclass(frozen=True)
 class MLEResult:
+    """Result of :func:`fit_mle`.
+
+    Attributes
+    ----------
+    fragility : LognormalFragility
+        Estimated median and dispersion.
+    log_likelihood : float
+        Maximised log-likelihood (without the binomial coefficient).
+    converged : bool
+        Whether the optimiser reported success.
+    """
+
     fragility: LognormalFragility
     log_likelihood: float
     converged: bool
@@ -26,17 +38,24 @@ def fit_mle(
     x0: tuple[float, float] | None = None,
     method: str = "BFGS",
 ) -> MLEResult:
-    """Maximise the binomial log-likelihood over ``(theta, beta)``.
-
-    The starting point defaults to the probit-GLM estimate, which is the same MLE under a
-    reparameterisation, so the optimiser only has to polish it.
+    """Maximum-likelihood fit of the lognormal fragility to stripe counts (paper reference).
 
     Parameters
     ----------
-    x0
-        Optional ``(theta, beta)`` starting point.
-    method
-        Any ``scipy.optimize.minimize`` method; gradients are supplied analytically.
+    data : CollapseData
+        Stripe counts.
+    x0 : tuple of float, optional
+        Starting ``(theta, beta)``; defaults to the probit-GLM estimate.
+    method : str, default "BFGS"
+        Any ``scipy.optimize.minimize`` method; analytic gradients are supplied.
+
+    Returns
+    -------
+    MLEResult
+
+    See Also
+    --------
+    pyFragility.fit_msa : The general interface with uncertainty and diagnostics.
     """
     if x0 is None:
         start = fit_probit_glm(data).fragility.to_lognormal()

@@ -82,7 +82,43 @@ class _BinomialBase(Likelihood):
 
 
 class BinomialGLM(_BinomialBase):
-    """``k ~ Binomial(n, F(x'beta))`` with ``x = (1, ln im_1, ..., ln im_d)``."""
+    """Binomial data with a generalised linear model: ``k ~ Binomial(n, F(x'beta))``.
+
+    The linear predictor is ``x'beta`` with ``x = (1, ln im_1, ..., ln im_d)`` (intensity measures
+    are log-transformed unless ``log_im`` says otherwise) and ``F`` the inverse link. With a probit
+    link and one log-transformed intensity this is the lognormal fragility
+    ``Phi((ln im - ln theta) / beta)`` with ``beta1 = 1 / beta`` and ``beta0 = -ln(theta) / beta``.
+    Score and Hessian are analytic.
+
+    Parameters
+    ----------
+    im : array_like of shape (m,) or (m, d)
+        Intensity of each row (one column per intensity measure).
+    k : array_like of shape (m,)
+        Number of exceedances in each row.
+    n : array_like of shape (m,)
+        Number of records in each row (``1`` for individual structures).
+    link : {"probit", "logit", "cloglog"} or Link, default "probit"
+        Link function.
+    log_im : bool or sequence of bool, default True
+        Whether each intensity measure enters as its logarithm.
+    cluster : array_like, optional
+        Cluster label of each row (e.g. the earthquake event).
+    im_names : list of str, optional
+        Names of the intensity measures, used in ``param_names``.
+
+    Raises
+    ------
+    ValueError
+        If counts are inconsistent (``k > n``), an intensity is not positive where a logarithm is
+        taken, or shapes do not match.
+
+    See Also
+    --------
+    fit_binomial : Convenience function that builds and fits this model.
+    BetaBinomialGLM : With extra-binomial variation.
+    BinomialLognormal : Same model with ``(theta, beta)`` as parameters.
+    """
 
     model_name = "binomial GLM"
     _row_attrs = ("im", "X", "k", "n", "cluster")
@@ -155,6 +191,17 @@ class BinomialGLM(_BinomialBase):
         return k * r1 - (n - k) * r2, k * (g * r1 - r1**2) - (n - k) * (g * r2 + r2**2)
 
     def expected_information(self, params: NDArray) -> NDArray:
+        """Fisher information ``sum_i n_i f_i^2 / (F_i (1 - F_i)) x_i x_i'``.
+
+        Parameters
+        ----------
+        params : ndarray
+            Regression coefficients.
+
+        Returns
+        -------
+        ndarray of shape (n_params, n_params)
+        """
         eta = self._eta(params)
         log_w = 2 * self.link.log_pdf(eta) - self.link.log_cdf(eta) - self.link.log_sf(eta)
         return self.X.T @ ((self.n * np.exp(log_w))[:, None] * self.X)
@@ -181,6 +228,25 @@ class BinomialGLM(_BinomialBase):
         return (self.im[:, 0], self.k / self.n) if self.im.shape[1] == 1 else None
 
     def lognormal_transform(self, params: NDArray, **kwargs: Any) -> NDArray:
+        """Median and dispersion of a probit fit on one log-transformed intensity.
+
+        Parameters
+        ----------
+        params : ndarray
+            ``(beta0, beta1)``.
+        **kwargs
+            Ignored.
+
+        Returns
+        -------
+        ndarray of shape (2,)
+            ``[exp(-beta0 / beta1), 1 / beta1]``.
+
+        Raises
+        ------
+        NotImplementedError
+            Unless the link is probit and there is a single log-transformed intensity.
+        """
         if not (self.link.name == "probit" and self.im.shape[1] == 1 and self.log_flags[0]):
             raise NotImplementedError(
                 "a lognormal (median, beta) form needs a probit link and one log-transformed IM; "
@@ -191,11 +257,33 @@ class BinomialGLM(_BinomialBase):
 
 
 class BetaBinomialGLM(BinomialGLM):
-    """Beta-binomial GLM: the collapse probability itself varies between stripes.
+    """Beta-binomial GLM: the exceedance probability itself varies between rows.
 
-    ``k ~ BetaBinomial(n, mu * phi, (1 - mu) * phi)`` with ``mu = F(x'beta)``; ``phi`` is the
-    precision (``phi -> inf`` recovers the binomial). It accommodates extra-binomial scatter,
-    an alternative to robust standard errors for one kind of misspecification.
+    ``k ~ BetaBinomial(n, mu * phi, (1 - mu) * phi)`` with ``mu = F(x'beta)`` and precision
+    ``phi > 0``; ``phi -> inf`` recovers the binomial. It accommodates extra-binomial scatter, an
+    alternative to robust standard errors for one kind of misspecification. The precision is the
+    last parameter (``"precision"``). Derivatives are numerical, and no expected information is
+    available.
+
+    Parameters
+    ----------
+    *args, **kwargs
+        As for :class:`BinomialGLM`.
+
+    Raises
+    ------
+    ValueError
+        If all ``n`` equal 1, where overdispersion is not identifiable.
+
+    See Also
+    --------
+    fit_binomial : Use ``overdispersion=True``.
+    pyFragility.inference.likelihood_ratio_test : Compare with the binomial fit.
+
+    Notes
+    -----
+    When the data show no overdispersion the maximum lies at ``phi = inf``; the fit then warns that
+    no well-defined maximum was reached.
     """
 
     model_name = "beta-binomial GLM"
@@ -275,11 +363,30 @@ class BetaBinomialGLM(BinomialGLM):
 
 
 class BinomialLognormal(_BinomialBase):
-    """Binomial data with the lognormal fragility parameterised by ``(theta, beta)`` directly.
+    """Binomial data with the lognormal fragility parameterised directly by ``(theta, beta)``.
 
-    This is the parameterisation of Dahal, Burton & Onyambu (2022). It is the same model as a
-    probit GLM on ``ln(im)`` (``beta1 = 1/beta``, ``beta0 = -ln(theta)/beta``) but reports the
-    median and log-standard deviation, and reproduces the paper's estimates exactly.
+    This is the parameterisation of Dahal, Burton & Onyambu (2022) and reproduces its estimates. It
+    is the same model as a probit GLM on ``ln(im)`` (``beta1 = 1 / beta``,
+    ``beta0 = -ln(theta) / beta``) but reports the median and log-standard deviation and lets
+    profile-likelihood intervals be computed for them directly.
+
+    Parameters
+    ----------
+    im : array_like of shape (m,)
+        Positive intensity of each stripe.
+    k, n : array_like of shape (m,)
+        Exceedances and records at each stripe.
+    cluster : array_like, optional
+        Cluster label of each row.
+
+    See Also
+    --------
+    fit_msa : Convenience function that builds and fits this model.
+
+    References
+    ----------
+    .. [1] Dahal, L., Burton, H., & Onyambu, S. (2022). Quantifying the effect of probability model
+       misspecification in seismic collapse risk assessment. Structural Safety, 96, 102185.
     """
 
     model_name = "lognormal (binomial)"
@@ -334,6 +441,17 @@ class BinomialLognormal(_BinomialBase):
         )
 
     def expected_information(self, params):
+        """Fisher information in ``(theta, beta)``.
+
+        Parameters
+        ----------
+        params : ndarray
+            ``(theta, beta)``.
+
+        Returns
+        -------
+        ndarray of shape (2, 2)
+        """
         theta, beta = params
         z = np.log(self.im / theta) / beta
         log_w = 2 * norm.logpdf(z) - special.log_ndtr(z) - special.log_ndtr(-z)
@@ -389,20 +507,74 @@ def fit_binomial(
 
     Parameters
     ----------
-    im
+    im : array_like of shape (m,) or (m, d), or CollapseData
         Intensity per row: 1-D, or ``(rows, d)`` for several intensity measures. May also be a
-        :class:`~pyFragility.CollapseData`.
-    link
-        ``"probit"`` (lognormal fragility), ``"logit"`` or ``"cloglog"``.
-    overdispersion
+        :class:`~pyFragility.CollapseData`, in which case the counts are taken from it.
+    num_exceed : array_like of shape (m,)
+        Number of exceedances (e.g. collapses, or damaged structures) in each row.
+    num_total : array_like of shape (m,)
+        Number of records in each row (``1`` for individual structures).
+    link : {"probit", "logit", "cloglog"} or Link, default "probit"
+        Probit gives a lognormal fragility, logit a log-logistic one, and complementary log-log an
+        asymmetric (Gumbel-type) curve.
+    overdispersion : bool, default False
         Fit a beta-binomial instead of a binomial (extra-binomial variation between rows).
-    parametrization
+    log_im : bool or sequence of bool, default True
+        Whether each intensity measure enters as its logarithm.
+    parametrization : {"lognormal", "glm"}, optional
         ``"lognormal"`` reports ``(theta, beta)``; ``"glm"`` reports the regression coefficients.
-        The default is ``"lognormal"`` for a probit link with a single log-transformed IM and
-        ``"glm"`` otherwise.
-    cluster
-        Cluster label per row (e.g. the earthquake event). The sandwich covariance then
-        accounts for within-cluster correlation.
+        The default is ``"lognormal"`` for a probit link with a single log-transformed intensity
+        and no overdispersion, and ``"glm"`` otherwise.
+    cluster : array_like, optional
+        Cluster label per row (e.g. the earthquake event). The sandwich covariance then accounts
+        for within-cluster correlation.
+    im_names : list of str, optional
+        Names of the intensity measures (GLM parametrisation).
+
+    Returns
+    -------
+    FragilityFit
+
+    Raises
+    ------
+    ValueError
+        For inconsistent counts, or ``parametrization="lognormal"`` with a link, intensity or
+        overdispersion setting it does not support.
+    TypeError
+        If ``im`` is not a ``CollapseData`` and the counts are missing.
+
+    See Also
+    --------
+    fit_msa : Multiple-stripe analysis with the paper's defaults.
+    fit_field_data : One 0/1 outcome per structure.
+
+    Notes
+    -----
+    The model is ``k_i ~ Binomial(n_i, F(beta0 + beta1 ln im_i))`` where ``F`` is the inverse
+    link. Estimation is by maximum likelihood; uncertainty is reported both assuming the model is
+    correct (``cov="mle"``, ``"expected"``) and robustly (``cov="sandwich"``), with one score
+    per row.
+
+    Examples
+    --------
+    A logistic fragility from counts at seven stripes:
+
+    >>> import pyFragility as pf
+    >>> im = [0.2, 0.4, 0.6, 0.8, 1.0, 1.4, 2.0]
+    >>> exceed = [0, 1, 3, 6, 9, 14, 15]
+    >>> fit = pf.fit_binomial(im, exceed, [15] * 7, link="logit")
+    >>> fit.param_names
+    ('intercept', 'ln(im)')
+    >>> fit.params.round(2)
+    array([0.71, 4.37])
+
+    Two intensity measures (the second enters without a logarithm):
+
+    >>> import numpy as np
+    >>> x = np.column_stack([im, [10, 25, 12, 30, 18, 22, 28]])
+    >>> fit2 = pf.fit_binomial(x, exceed, [15] * 7, log_im=[True, False], im_names=["sa", "dur"])
+    >>> fit2.param_names
+    ('intercept', 'ln(sa)', 'dur')
     """
     im, k, n = _unpack(im, num_exceed, num_total)
     link = get_link(link)
@@ -429,11 +601,56 @@ def fit_binomial(
 
 
 def fit_msa(im, num_exceed=None, num_gm=None, **kwargs) -> FragilityFit:
-    """Multiple-stripe analysis: ``num_exceed`` of ``num_gm`` ground motions exceed the limit
-    state (e.g. collapse) at each stripe.
+    """Multiple-stripe analysis: ground motions exceeding a limit state at each stripe.
 
-    Accepts the same options as :func:`fit_binomial`. With the defaults this is the paper's
-    lognormal ``(theta, beta)`` fit with MLE and sandwich uncertainty.
+    With the defaults this is the lognormal ``(theta, beta)`` fit of Dahal, Burton & Onyambu
+    (2022), with MLE and misspecification-robust (sandwich) uncertainty.
+
+    Parameters
+    ----------
+    im : array_like of shape (m,) or CollapseData
+        Intensity of each stripe, or a :class:`~pyFragility.CollapseData`.
+    num_exceed : array_like of shape (m,)
+        Ground motions exceeding the limit state (e.g. causing collapse) at each stripe.
+    num_gm : array_like of shape (m,)
+        Ground motions analysed at each stripe.
+    **kwargs
+        Options of :func:`fit_binomial` (``link``, ``overdispersion``, ``parametrization``,
+        ``cluster``, ...).
+
+    Returns
+    -------
+    FragilityFit
+        With parameters ``theta`` (median) and ``beta`` (log-standard deviation) unless another
+        parametrisation is requested.
+
+    See Also
+    --------
+    fit_binomial : The general function.
+    pyFragility.datasets.load_msa_wood_frame : The paper's data.
+
+    References
+    ----------
+    .. [1] Dahal, L., Burton, H., & Onyambu, S. (2022). Quantifying the effect of probability model
+       misspecification in seismic collapse risk assessment. Structural Safety, 96, 102185.
+
+    Examples
+    --------
+    >>> import pyFragility as pf
+    >>> ds = pf.datasets.load_msa_wood_frame()
+    >>> fit = pf.fit_msa(ds.im, ds.counts["B2-Existing"], [ds.num_gm] * 16)
+    >>> fit.params.round(3)
+    array([2.381, 0.572])
+    >>> fit.std_errors("mle").round(3)
+    array([0.09, 0.04])
+    >>> fit.std_errors("sandwich").round(3)
+    array([0.065, 0.028])
+
+    The fit can also be built from a :class:`~pyFragility.CollapseData`:
+
+    >>> fit = pf.fit_msa(ds.data("B2-Existing"))
+    >>> fit.n_obs
+    16
     """
     return fit_binomial(im, num_exceed, num_gm, **kwargs)
 
@@ -441,10 +658,58 @@ def fit_msa(im, num_exceed=None, num_gm=None, **kwargs) -> FragilityFit:
 def fit_field_data(
     im: ArrayLike, damaged: ArrayLike, *, cluster: ArrayLike | None = None, **kwargs: Any
 ) -> FragilityFit:
-    """Post-earthquake survey data: one 0/1 ``damaged`` outcome per structure at its ``im``.
+    """Post-earthquake survey data: one 0/1 damage outcome per structure.
 
-    Pass ``cluster`` (e.g. event or site ids) so the sandwich covariance accounts for
-    correlated structures. A logit or probit link is typical; see :func:`fit_binomial`.
+    Parameters
+    ----------
+    im : array_like of shape (m,) or (m, d)
+        Intensity at each structure's site.
+    damaged : array_like of shape (m,)
+        1 if the structure reached the limit state, otherwise 0.
+    cluster : array_like, optional
+        Cluster label per structure (e.g. event or site). The sandwich covariance then accounts
+        for correlation between structures in the same cluster.
+    **kwargs
+        Options of :func:`fit_binomial` (``link``, ``log_im``, ...). The default parametrisation is
+        ``"glm"``.
+
+    Returns
+    -------
+    FragilityFit
+
+    Raises
+    ------
+    ValueError
+        If ``damaged`` contains values other than 0 and 1.
+
+    See Also
+    --------
+    fit_binomial : The general function.
+
+    Notes
+    -----
+    Structures hit by the same earthquake share ground-motion and site effects, so their outcomes
+    are correlated and the usual (MLE) standard errors are too small. Providing ``cluster`` makes
+    the sandwich covariance robust to that.
+
+    Examples
+    --------
+    >>> im = [0.2, 0.25, 0.3, 0.35, 0.4, 0.5, 0.55, 0.6, 0.7, 0.8,
+    ...       0.9, 1.0, 1.1, 1.2, 1.3, 1.5, 1.7, 1.9, 2.2, 2.5]
+    >>> damaged = [0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1]
+    >>> import pyFragility as pf
+    >>> fit = pf.fit_field_data(im, damaged, link="logit")
+    >>> fit.summary().round(2)
+               estimate  se_mle  se_sandwich  ratio
+    intercept      0.76    0.73         0.71   0.98
+    ln(im)         3.75    1.61         1.27   0.79
+
+    With events as clusters the robust standard errors reflect within-event correlation:
+
+    >>> events = [1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4]
+    >>> clustered = pf.fit_field_data(im, damaged, link="logit", cluster=events)
+    >>> clustered.std_errors("sandwich").round(2)
+    array([0.46, 0.77])
     """
     damaged = np.asarray(damaged, dtype=float)
     if not np.all(np.isin(damaged, (0.0, 1.0))):

@@ -26,6 +26,22 @@ from pyFragility.engine import FragilityFit, fit_likelihood
 
 @dataclass(frozen=True)
 class TestResult:
+    """Result of a hypothesis test.
+
+    Attributes
+    ----------
+    name : str
+        Name of the test.
+    statistic : float
+        Test statistic.
+    dof : int
+        Degrees of freedom of the asymptotic chi-square distribution.
+    p_value : float
+        Asymptotic p-value.
+    p_value_bootstrap : float or None
+        Simulation-based p-value, if requested.
+    """
+
     __test__ = False  # not a pytest class
 
     name: str
@@ -36,6 +52,7 @@ class TestResult:
 
     @property
     def reject_at_5pct(self) -> bool:
+        """Whether the null is rejected at the 5% level (bootstrap p-value if available)."""
         p = self.p_value if self.p_value_bootstrap is None else self.p_value_bootstrap
         return p < 0.05
 
@@ -60,12 +77,59 @@ def _im_statistic(lik, params: NDArray) -> tuple[float, int]:
 def information_matrix_test(
     fit: FragilityFit, *, n_boot: int = 0, seed: int | None = 0
 ) -> TestResult:
-    """Test whether the assumed probability model is correctly specified.
+    """White's information-matrix test of probability-model misspecification.
 
-    Under correct specification the information-matrix equality ``A + B = 0`` holds (paper
-    Eq. 19). The chi-square p-value relies on large samples and is known to over-reject with few
-    rows (e.g. 10-20 stripes); ``n_boot > 0`` adds a parametric-bootstrap p-value, which is
-    reliable in small samples.
+    If the assumed probability model is correct, the information-matrix equality ``A + B = 0``
+    holds, where ``A`` is the Hessian of the log-likelihood and ``B`` the sum of the outer products
+    of the per-observation scores (paper Eq. 19). The test checks this equality through the
+    contributions ``vech(H_i + s_i s_i')`` in its outer-product (Chesher-Lancaster) form: the
+    statistic is ``n R^2`` of a regression of a vector of ones on the scores and these
+    contributions, asymptotically chi-square with as many degrees of freedom as there are
+    distinct elements of the information matrix.
+
+    Parameters
+    ----------
+    fit : FragilityFit
+        The fitted model.
+    n_boot : int, default 0
+        Number of parametric-bootstrap replications used for a simulation-based p-value.
+    seed : int or None, default 0
+        Seed of the random number generator.
+
+    Returns
+    -------
+    TestResult
+        Statistic, degrees of freedom, asymptotic p-value and (if ``n_boot > 0``) bootstrap p-value.
+
+    See Also
+    --------
+    pyFragility.FragilityFit.covariance : Compare ``"mle"`` and ``"sandwich"`` directly.
+
+    Notes
+    -----
+    The chi-square p-value relies on large samples and is known to over-reject with few rows
+    (e.g. the 10-20 stripes of a typical MSA); with ``n_boot > 0`` the bootstrap p-value,
+    obtained by simulating data from the fitted model and recomputing the statistic, is reliable
+    in small samples. The test has power against extra-binomial variation and a wrong link, not
+    against every alternative.
+
+    References
+    ----------
+    .. [1] White, H. (1982). Maximum likelihood estimation of misspecified models. Econometrica,
+       50, 1-25.
+    .. [2] Chesher, A. (1983). The information matrix test: simplified calculation via a score test
+       interpretation. Economics Letters, 13, 45-48.
+
+    Examples
+    --------
+    >>> import pyFragility as pf
+    >>> ds = pf.datasets.load_msa_wood_frame()
+    >>> fit = pf.fit_msa(ds.im, ds.counts["B2-Existing"], [ds.num_gm] * 16)
+    >>> result = fit.misspecification_test()
+    >>> result.dof
+    3
+    >>> round(result.statistic, 2), round(result.p_value, 3)
+    (7.39, 0.061)
     """
     lik, params = fit.likelihood, fit.params
     stat, dof = _im_statistic(lik, params)
@@ -93,6 +157,22 @@ def information_matrix_test(
 
 @dataclass(frozen=True)
 class GoodnessOfFit:
+    """Deviance and Pearson goodness of fit.
+
+    Attributes
+    ----------
+    deviance : float
+        ``2 (loglik_saturated - loglik)``.
+    dof : int
+        Degrees of freedom, ``n_obs - n_params``.
+    p_value : float
+        Chi-square p-value of the deviance.
+    pearson : float or None
+        Pearson chi-square statistic (binomial data).
+    pearson_p_value : float or None
+        Chi-square p-value of the Pearson statistic.
+    """
+
     deviance: float
     dof: int
     p_value: float
@@ -103,7 +183,34 @@ class GoodnessOfFit:
 def goodness_of_fit(fit: FragilityFit) -> GoodnessOfFit:
     """Deviance (and Pearson chi-square for binomial data) against the saturated model.
 
+    Parameters
+    ----------
+    fit : FragilityFit
+        The fitted model.
+
+    Returns
+    -------
+    GoodnessOfFit
+
+    Raises
+    ------
+    NotImplementedError
+        If the model has no saturated counterpart (capacity and cloud models).
+
+    Notes
+    -----
     Chi-square p-values are approximate when expected counts are small.
+
+    Examples
+    --------
+    >>> import pyFragility as pf
+    >>> ds = pf.datasets.load_msa_wood_frame()
+    >>> fit = pf.fit_msa(ds.im, ds.counts["B2-Existing"], [ds.num_gm] * 16)
+    >>> gof = pf.inference.goodness_of_fit(fit)
+    >>> gof.dof
+    14
+    >>> round(gof.deviance, 2), round(gof.p_value, 3)
+    (7.5, 0.914)
     """
     lik = fit.likelihood
     sat = lik.saturated_loglik()
@@ -121,7 +228,38 @@ def goodness_of_fit(fit: FragilityFit) -> GoodnessOfFit:
 
 
 def compare_models(fits: Mapping[str, FragilityFit]) -> pd.DataFrame:
-    """Log-likelihood, AIC, BIC and the misspecification-robust TIC of fits to the *same data*."""
+    """Compare fits to the same data by information criteria.
+
+    Parameters
+    ----------
+    fits : mapping of str to FragilityFit
+        Fits of different models to the *same* data.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Log-likelihood, number of parameters, ``AIC``, ``BIC`` and ``TIC`` of each model, and each
+        criterion's difference to the best (``dAIC``, ``dBIC``, ``dTIC``). TIC is an AIC whose
+        penalty stays valid under misspecification.
+
+    Notes
+    -----
+    Log-likelihoods are only comparable between models fitted to the same rows; binomial
+    coefficients are included so binomial and beta-binomial fits can be compared.
+
+    Examples
+    --------
+    >>> import pyFragility as pf
+    >>> ds = pf.datasets.load_msa_wood_frame()
+    >>> fit = pf.fit_msa(ds.im, ds.counts["B2-Existing"], [ds.num_gm] * 16)
+    >>> logit = pf.fit_msa(ds.im, ds.counts["B2-Existing"], [45] * 16, link="logit")
+    >>> fits = {"probit": fit, "logit": logit}
+    >>> table = pf.compare_models(fits)
+    >>> table["dAIC"].round(2)
+    probit    0.00
+    logit     2.52
+    Name: dAIC, dtype: float64
+    """
     rows = {
         name: {
             "loglik": f.loglik,
@@ -141,8 +279,27 @@ def compare_models(fits: Mapping[str, FragilityFit]) -> pd.DataFrame:
 def likelihood_ratio_test(
     restricted: FragilityFit, full: FragilityFit, *, boundary: bool = False
 ) -> TestResult:
-    """Likelihood-ratio test of a nested model. ``boundary=True`` halves the p-value for a
-    single parameter on the edge of its space (e.g. beta-binomial precision -> infinity)."""
+    """Likelihood-ratio test of a nested model.
+
+    Parameters
+    ----------
+    restricted : FragilityFit
+        Fit of the restricted (simpler) model.
+    full : FragilityFit
+        Fit of the full model, with more parameters.
+    boundary : bool, default False
+        Halve the p-value, for a single parameter on the edge of its space (e.g. the beta-binomial
+        precision tending to infinity).
+
+    Returns
+    -------
+    TestResult
+
+    Raises
+    ------
+    ValueError
+        If ``full`` does not have more parameters than ``restricted``.
+    """
     dof = full.n_params - restricted.n_params
     if dof <= 0:
         raise ValueError("the full model must have more parameters")
@@ -158,24 +315,75 @@ def likelihood_ratio_test(
 
 @dataclass
 class BootstrapResult:
+    """Bootstrap replications of a fit.
+
+    Attributes
+    ----------
+    fit : FragilityFit
+        The original fit.
+    params : ndarray of shape (n_success, n_params)
+        Parameters of each converged bootstrap refit.
+    resample : str
+        Resampling scheme used.
+    n_failed : int
+        Number of refits that failed or did not converge.
+    """
+
     fit: FragilityFit
     params: NDArray
     resample: str
     n_failed: int
 
     def covariance(self) -> NDArray:
+        """Covariance matrix of the bootstrap parameters.
+
+        Returns
+        -------
+        ndarray of shape (n_params, n_params)
+        """
         return np.atleast_2d(np.cov(self.params, rowvar=False))
 
     def std_errors(self) -> NDArray:
+        """Bootstrap standard errors of the parameters.
+
+        Returns
+        -------
+        ndarray of shape (n_params,)
+        """
         return np.sqrt(np.diag(self.covariance()))
 
     def interval(self, level: float = 0.95) -> pd.DataFrame:
-        """Percentile intervals for the parameters."""
+        """Percentile confidence intervals of the parameters.
+
+        Parameters
+        ----------
+        level : float, default 0.95
+            Confidence level.
+
+        Returns
+        -------
+        pandas.DataFrame
+            ``lower`` and ``upper`` for each parameter.
+        """
         lo, hi = np.quantile(self.params, [(1 - level) / 2, 1 - (1 - level) / 2], axis=0)
         return pd.DataFrame({"lower": lo, "upper": hi}, index=list(self.fit.param_names))
 
     def curve_band(self, im: ArrayLike, level: float = 0.95, **kwargs) -> tuple[NDArray, NDArray]:
-        """Percentile band of the fragility curve over the bootstrap parameters."""
+        """Percentile band of the fragility curve over the bootstrap parameters.
+
+        Parameters
+        ----------
+        im : array_like
+            Intensity values.
+        level : float, default 0.95
+            Confidence level.
+        **kwargs
+            Passed to ``curve`` (e.g. ``state=``).
+
+        Returns
+        -------
+        lower, upper : ndarray
+        """
         curves = np.array([self.fit.likelihood.curve(p, im, **kwargs) for p in self.params])
         lo, hi = np.quantile(curves, [(1 - level) / 2, 1 - (1 - level) / 2], axis=0)
         return lo, hi
@@ -186,12 +394,43 @@ def bootstrap(
 ) -> BootstrapResult:
     """Bootstrap the fit.
 
-    ``resample="parametric"`` simulates new data from the fitted model, so it reproduces the
-    model-based (MLE) variability. ``resample="nonparametric"`` resamples the individual records
-    within each stripe (grouped counts), or rows/clusters for ungrouped data; it holds the
-    stripes fixed. ``resample="pairs"`` resamples whole rows (stripes, or clusters if ids were
-    given), so it also captures scatter between stripes and is the bootstrap counterpart of the
-    sandwich covariance. Refits that fail to converge are discarded.
+    Parameters
+    ----------
+    fit : FragilityFit
+        The fitted model.
+    n_boot : int, default 500
+        Number of bootstrap samples.
+    resample : {"nonparametric", "parametric", "pairs"}, default "nonparametric"
+        * ``"parametric"``: simulate new data from the fitted model. Reproduces the model-based
+          (MLE) variability.
+        * ``"nonparametric"``: resample the individual records within each stripe (grouped
+          counts), or rows / clusters for ungrouped data. Holds the stripes fixed.
+        * ``"pairs"``: resample whole rows (stripes, or clusters if ids were given). Also captures
+          scatter between stripes, so it is the bootstrap counterpart of the sandwich covariance.
+    seed : int or None, default 0
+        Seed of the random number generator.
+
+    Returns
+    -------
+    BootstrapResult
+
+    Raises
+    ------
+    RuntimeError
+        If fewer than half of the refits converge.
+    ValueError
+        For an unknown ``resample``.
+
+    Examples
+    --------
+    >>> import pyFragility as pf
+    >>> ds = pf.datasets.load_msa_wood_frame()
+    >>> fit = pf.fit_msa(ds.im, ds.counts["B2-Existing"], [ds.num_gm] * 16)
+    >>> boot = fit.bootstrap(50, resample="pairs")
+    >>> boot.params.shape[1]
+    2
+    >>> bool((boot.std_errors() > 0).all())
+    True
     """
     rng = np.random.default_rng(seed)
     draws, failed = [], 0
@@ -222,8 +461,37 @@ def profile_likelihood_interval(
     """Likelihood-ratio confidence interval for one parameter.
 
     Unlike a Wald interval it respects the asymmetry of the likelihood, which matters with few
-    stripes/records. Bounds are ``nan`` if the profile does not cross the critical value inside
-    the parameter space.
+    stripes or records. The other parameters are re-optimised at every value of the parameter of
+    interest.
+
+    Parameters
+    ----------
+    fit : FragilityFit
+        The fitted model.
+    param : str or int
+        Parameter name or index.
+    level : float, default 0.95
+        Confidence level.
+
+    Returns
+    -------
+    lower, upper : float
+        Interval limits; ``nan`` if the profile does not cross the critical value inside the
+        parameter space.
+
+    Raises
+    ------
+    NotImplementedError
+        For models without simple parameter bounds (ordinal models).
+
+    Examples
+    --------
+    >>> import pyFragility as pf
+    >>> ds = pf.datasets.load_msa_wood_frame()
+    >>> fit = pf.fit_msa(ds.im, ds.counts["B2-Existing"], [ds.num_gm] * 16)
+    >>> lower, upper = fit.profile_interval("theta")
+    >>> round(lower, 2), round(upper, 2)
+    (2.21, 2.57)
     """
     lik, mle = fit.likelihood, fit.params
     j = list(fit.param_names).index(param) if isinstance(param, str) else int(param)

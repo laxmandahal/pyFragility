@@ -36,6 +36,9 @@ examples = ["ipykernel>=6.29", "nbformat>=5.10", "nbclient>=0.10"]
 
 [project.urls]
 Homepage = "https://github.com/laxmandahal/pyFragility"
+Documentation = "https://pyfragility.readthedocs.io"
+Changelog = "https://github.com/laxmandahal/pyFragility/blob/main/CHANGELOG.md"
+Issues = "https://github.com/laxmandahal/pyFragility/issues"
 
 [build-system]
 requires = ["hatchling"]
@@ -55,8 +58,9 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-ra --strict-markers --strict-config"
+testpaths = ["tests", "src"]
+addopts = "-ra --strict-markers --strict-config --doctest-modules"
+doctest_optionflags = "NORMALIZE_WHITESPACE ELLIPSIS"
 markers = [
     "slow: simulation-heavy tests (deselect with -m 'not slow')",
     "notebooks: executes the example notebooks (needs the 'examples' extra)",

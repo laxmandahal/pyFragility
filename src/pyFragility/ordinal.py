@@ -20,12 +20,40 @@ from pyFragility.links import Link, get_link
 
 
 class OrdinalGLM(Likelihood):
-    """Cumulative-link (proportional-odds style) model with a shared slope.
+    """Cumulative-link model with a shared slope for ordered damage states.
 
     ``P(state >= j | x) = F(alpha_j + x'beta)`` for ``j = 1..K`` with
-    ``alpha_1 > alpha_2 > ... > alpha_K``, so the damage-state fragility curves are parallel on
-    the link scale and can never cross. ``counts[i, s]`` is the number of observations in state
-    ``s = 0..K`` at row ``i`` (one-hot rows for individual observations).
+    ``alpha_1 > alpha_2 > ... > alpha_K``, so the curves of the different damage states are
+    parallel on the link scale and can never cross. ``counts[i, s]`` is the number of observations
+    in state ``s = 0..K`` at row ``i`` (one-hot rows for individual observations). Parameters are
+    ``alpha1..alphaK`` followed by the slope(s).
+
+    Parameters
+    ----------
+    im : array_like of shape (m,) or (m, d)
+        Intensity of each row.
+    counts : array_like of shape (m, K + 1)
+        Observations in each damage state at each row.
+    link : {"probit", "logit", "cloglog"} or Link, default "probit"
+        Link function.
+    log_im : bool or sequence of bool, default True
+        Whether each intensity enters as its logarithm.
+    cluster : array_like, optional
+        Cluster label per row.
+
+    Attributes
+    ----------
+    n_states : int
+        Number of damage states ``K`` above the undamaged state 0.
+
+    Raises
+    ------
+    ValueError
+        For malformed counts or non-positive intensities.
+
+    See Also
+    --------
+    fit_damage_states : Convenience function that builds and fits this model.
     """
 
     model_name = "ordinal GLM"
@@ -75,7 +103,20 @@ class OrdinalGLM(Likelihood):
         return self.link.cdf(alpha[None, :] + (X @ beta)[:, None])  # (m, K): P(state >= j)
 
     def state_probabilities(self, params: NDArray, im: ArrayLike) -> NDArray:
-        """``P(state = s | im)`` for ``s = 0..K``, shape ``(len(im), K + 1)``."""
+        """Probability of each damage state at intensity ``im``.
+
+        Parameters
+        ----------
+        params : ndarray
+            Fitted parameters.
+        im : array_like
+            Intensity values.
+
+        Returns
+        -------
+        ndarray of shape (len(im), K + 1)
+            ``P(state = s | im)`` for ``s = 0..K``; rows sum to one.
+        """
         cum = self._cumulative(params, self._design(self._as_im(im)))
         ones = np.ones((cum.shape[0], 1))
         return np.hstack([ones, cum]) - np.hstack([cum, np.zeros((cum.shape[0], 1))])
@@ -138,6 +179,24 @@ class OrdinalGLM(Likelihood):
         return np.sum(self.counts * np.log(pi), axis=1) + coef
 
     def curve(self, params, im, state: int = 1, **kwargs):
+        """Exceedance probability ``P(state >= j | im)`` of one damage state.
+
+        Parameters
+        ----------
+        params : ndarray
+            Fitted parameters.
+        im : array_like
+            Intensity values.
+        state : int, default 1
+            Damage state ``j`` in ``1..K``.
+        **kwargs
+            Ignored.
+
+        Returns
+        -------
+        ndarray
+            Exceedance probability at each ``im``.
+        """
         return self.link.cdf(self.curve_eta(params, im, state=state))
 
     def curve_eta(self, params, im, state: int = 1, **kwargs):
@@ -178,20 +237,71 @@ class OrdinalGLM(Likelihood):
 
 
 class DamageStateFits:
-    """Independent fits for each damage state (curves may cross; see :func:`fit_damage_states`)."""
+    """Independent fits for each damage state (the curves may cross).
+
+    Returned by :func:`fit_damage_states_independent`.
+
+    Parameters
+    ----------
+    fits : list of FragilityFit
+        One fit per damage state ``1..K``.
+
+    Attributes
+    ----------
+    fits : list of FragilityFit
+        The per-state fits.
+    n_states : int
+        Number of damage states.
+    """
 
     def __init__(self, fits: list[FragilityFit]) -> None:
         self.fits = fits
         self.n_states = len(fits)
 
     def probability(self, im: ArrayLike, state: int = 1) -> NDArray:
+        """Exceedance probability of a damage state.
+
+        Parameters
+        ----------
+        im : array_like
+            Intensity values.
+        state : int, default 1
+            Damage state in ``1..K``.
+
+        Returns
+        -------
+        ndarray
+        """
         return self.fits[state - 1].probability(im)
 
     def confidence_band(self, im, level=0.95, cov="sandwich", state=1):
-        """Confidence band of the curve for damage state ``state``."""
+        """Confidence band of the curve of one damage state.
+
+        Parameters
+        ----------
+        im : array_like
+            Intensity values.
+        level : float, default 0.95
+            Confidence level.
+        cov : {"sandwich", "mle", "expected"}, default "sandwich"
+            Covariance estimate.
+        state : int, default 1
+            Damage state.
+
+        Returns
+        -------
+        lower, upper : ndarray
+        """
         return self.fits[state - 1].confidence_band(im, level, cov)
 
     def summary(self):
+        """Estimates and standard errors of every state.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Indexed by ``(state, parameter)``.
+        """
         import pandas as pd
 
         frames = {f"DS{j + 1}": f.summary() for j, f in enumerate(self.fits)}
@@ -223,11 +333,55 @@ def fit_damage_states(
 ) -> FragilityFit:
     """Fit the fragility curves of several ordered damage states jointly.
 
-    Provide either ``damage_state`` (observed state ``0..K`` per structure) or ``counts``
-    (``(rows, K + 1)`` counts per state at each intensity). A cumulative-link model with a shared
-    slope is fitted, so the curves ``P(DS >= j | im)`` never cross; evaluate them with
-    ``fit.probability(im, state=j)``. To let each state have its own dispersion (possibly with
-    crossing curves) use :func:`fit_damage_states_independent`.
+    A cumulative-link model with a shared slope is fitted, so the curves ``P(DS >= j | im)`` never
+    cross; evaluate them with ``fit.probability(im, state=j)``.
+
+    Parameters
+    ----------
+    im : array_like of shape (m,) or (m, d)
+        Intensity of each row.
+    damage_state : array_like of int, optional
+        Observed damage state ``0..K`` of each structure.
+    counts : array_like of shape (m, K + 1), optional
+        Counts of each damage state at each intensity, instead of ``damage_state``.
+    n_states : int, optional
+        Highest damage state ``K`` when ``damage_state`` does not contain it.
+    link : {"probit", "logit", "cloglog"} or Link, default "probit"
+        Link function.
+    cluster : array_like, optional
+        Cluster label per row.
+    **kwargs
+        Passed to :class:`OrdinalGLM` (e.g. ``log_im``).
+
+    Returns
+    -------
+    FragilityFit
+        Parameters ``alpha1..alphaK`` and the slope.
+
+    Raises
+    ------
+    ValueError
+        Unless exactly one of ``damage_state`` and ``counts`` is given, or if states are not
+        integers within ``0..K``.
+
+    See Also
+    --------
+    fit_damage_states_independent : Separate fit per state, allowing different dispersions.
+    pyFragility.risk.vulnerability : Expected loss from damage-state fragilities.
+
+    Examples
+    --------
+    Counts of four states (none, slight, moderate, extensive) at six intensities:
+
+    >>> import pyFragility as pf
+    >>> im = [0.2, 0.4, 0.7, 1.0, 1.5, 2.2]
+    >>> counts = [[38, 2, 0, 0], [30, 8, 2, 0], [18, 14, 7, 1],
+    ...           [8, 14, 13, 5], [2, 9, 16, 13], [0, 3, 12, 25]]
+    >>> fit = pf.fit_damage_states(im, counts=counts)
+    >>> fit.param_names
+    ('alpha1', 'alpha2', 'alpha3', 'ln(im)')
+    >>> fit.probability([1.0], state=2).round(3)
+    array([0.46])
     """
     counts_arr = _resolve_counts(damage_state, counts, n_states)
     return fit_likelihood(OrdinalGLM(im, counts_arr, link=link, cluster=cluster, **kwargs))
@@ -246,7 +400,19 @@ def fit_damage_states_independent(
     """Fit each damage state's curve ``P(DS >= j | im)`` separately (the traditional approach).
 
     Every state gets its own parameters, so dispersions may differ, but the curves can cross.
-    Takes the same data as :func:`fit_damage_states`.
+
+    Parameters
+    ----------
+    im, damage_state, counts, n_states, link, cluster, **kwargs
+        As for :func:`fit_damage_states`; ``**kwargs`` go to :func:`~pyFragility.fit_binomial`.
+
+    Returns
+    -------
+    DamageStateFits
+
+    See Also
+    --------
+    fit_damage_states : Joint fit with non-crossing curves.
     """
     counts_arr = _resolve_counts(damage_state, counts, n_states)
     total = counts_arr.sum(axis=1)

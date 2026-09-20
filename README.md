@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/laxmandahal/pyFragility/actions/workflows/ci.yml/badge.svg)](https://github.com/laxmandahal/pyFragility/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/pyFragility)](https://pypi.org/project/pyFragility/)
+[![Documentation](https://readthedocs.org/projects/pyfragility/badge/?version=latest)](https://pyfragility.readthedocs.io)
 ## Abstract
 
 One of the main steps in probabilistic seismic collapse risk assessment is estimating the fragility function parameters. The maximum likelihood estimation (MLE) approach, which is widely used for this purpose, contains the underlying assumption that the likelihood function is known to follow a specified parametric probability distribution. However, this assumed distribution may not always be consistent with the “true” probability distribution of the collapse data. This paper implements the Information matrix equivalence theorem to identify the presence of model misspecification i.e., if the assumed collapse probability distribution is, in fact, the “true” one. In the presence of model misspecification, the fragility parameter estimates continue to be asymptotically normally distributed but the variance-covariance matrix is no longer equal to the inverse of the Fisher’s Information matrix. To increase the robustness of the variance-covariance matrix, the Huber-White sandwich estimator is implemented. Using collapse data from eight woodframe buildings, the effect of model misspecification on fragility parameter estimates and collapse rate is quantified. For the considered building cases, the parameter estimation uncertainty in the collapse risk did not increase when the “sandwich” estimator was used compared to when probability model misspecification was not considered (i.e., using MLE). The proposed framework should be used to further investigate the issue of probability model misspecification as it relates to fragility parameter estimation since only a single construction type (woodframe buildings) and limit state (collapse) was considered in the current study.
@@ -23,6 +24,8 @@ each to collapse risk, is the approach of the paper above.
 | Ordered damage states | `fit_damage_states` | cumulative-link model (non-crossing curves) or independent fits |
 | Several intensity measures | `fit_binomial(..., log_im=[True, False])` | multi-covariate GLM |
 | Published / expert median and dispersion | `LognormalFragility` | direct |
+
+**Documentation: <https://pyfragility.readthedocs.io>**
 
 ## Installation
 Requires Python >= 3.11.
@@ -55,8 +58,8 @@ pf.expected_annual_loss(damage_state_fit, hazard, mean_loss_ratios)
 
 pf.fragility_table({"B1": fit_b1, "B2": fit_b2})  # median / dispersion table with standard errors
 ```
-See [examples/Fragility_Guide.ipynb](examples/Fragility_Guide.ipynb) for a walk-through of every data type and
-[examples/Example_Implementation.ipynb](examples/Example_Implementation.ipynb) for the paper's wood-frame case study.
+See [docs/examples/Fragility_Guide.ipynb](docs/examples/Fragility_Guide.ipynb) for a walk-through of every data type and
+[docs/examples/Example_Implementation.ipynb](docs/examples/Example_Implementation.ipynb) for the paper's wood-frame case study.
 
 ### Public API
 The top level holds the everyday workflow (`fit_*`, `FragilityFit`, `HazardCurve`, `compare_models`,

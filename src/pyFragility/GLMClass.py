@@ -23,9 +23,24 @@ _COV_TYPES = {
 
 
 class GLMProbitClass:
-    """Probit-link GLM fragility fit (legacy interface).
+    """Probit-link GLM fragility fit with the 0.0.x interface.
 
-    :param varType: one of ``'nonrobust'``, ``'expectedHessian'``, ``'observedHessian'``.
+    .. deprecated:: 0.2.0
+        Use :func:`pyFragility.fit_msa` (``parametrization="glm"``) instead; see
+        :doc:`/guide/migration`.
+
+    Parameters
+    ----------
+    hazardLevel : array_like
+        Intensity of each stripe.
+    collpaseCount : array_like
+        Collapses at each stripe (the misspelling is kept for compatibility).
+    numGM : array_like
+        Ground motions at each stripe.
+    collapseRate : array_like
+        Mean annual frequency of exceedance of each stripe's intensity.
+    varType : {"observedHessian", "expectedHessian", "nonrobust"}, default "observedHessian"
+        Covariance type; the two Hessian options give the same Huber-White covariance.
     """
 
     def __init__(self, hazardLevel, collpaseCount, numGM, collapseRate, varType="observedHessian"):

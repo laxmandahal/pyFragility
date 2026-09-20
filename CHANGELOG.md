@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
 
 ## [Unreleased]
 ### Added
+- **Documentation** (Sphinx, numpydoc, PyData theme; hosted on Read the Docs): quickstart,
+  user guide (choosing a function, uncertainty and misspecification, models, risk, extending,
+  migration), worked examples, and a complete API reference. Every public function and class has
+  a numpydoc docstring with examples; examples are run as doctests, guide pages execute their code
+  cells, and CI builds the docs with warnings as errors.
+- `pyFragility.datasets.load_msa_wood_frame()`: the paper's MSA data for eight wood-frame buildings.
+- A test that keeps the API reference in step with the public API, and one that stops dependency
+  lower bounds from being raised by accident.
 - CI: test matrix (Python 3.11-3.13; Linux, macOS, Windows), lowest-dependency job, notebook
   execution, build/install check, weekly run against the newest and pre-release dependencies,
   tag-triggered PyPI release workflow.
@@ -39,8 +47,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
   `statsmodels>=0.14`, `matplotlib>=3.8`). A Dependabot pull request had raised every lower bound to
   the newest release, which would have excluded most users and emptied the "lowest supported
   dependencies" CI job. Dependabot no longer manages Python dependencies.
-- Convergence detection no longer depends on the platform's finite-difference noise floor (the
-  beta-binomial fit was reported as non-converged on Windows and with old dependencies).
 - Convergence detection no longer depends on the platform's finite-difference noise floor (the
   beta-binomial fit was reported as non-converged on Windows and with old dependencies).
 

@@ -13,11 +13,31 @@ from pyFragility.engine import FragilityFit, Likelihood, fit_likelihood, resampl
 
 
 class LognormalCapacity(Likelihood):
-    """``ln capacity ~ Normal(ln theta, beta^2)`` with right-censoring.
+    """Capacity data: ``ln capacity ~ Normal(ln theta, beta^2)`` with right-censoring.
 
-    A record that never reached the limit state up to the largest intensity analysed
-    contributes only the information that its capacity exceeds that intensity
-    (``censored=True``, ``capacity`` = the largest intensity analysed for that record).
+    Each record contributes the intensity at which it reached the limit state. A record that never
+    reached it up to the largest intensity analysed contributes only the information that its
+    capacity exceeds that intensity (``censored=True``, ``capacity`` = the largest intensity
+    analysed for that record). The fragility is ``Phi(ln(im / theta) / beta)``.
+
+    Parameters
+    ----------
+    capacity : array_like of shape (m,)
+        Positive capacity of each record (or the censoring intensity).
+    censored : array_like of bool, optional
+        ``True`` for records that did not reach the limit state.
+    cluster : array_like, optional
+        Cluster label per record.
+
+    Raises
+    ------
+    ValueError
+        If there are fewer than three records, capacities are not positive, or every record is
+        censored.
+
+    See Also
+    --------
+    fit_ida : Convenience function that builds and fits this model.
     """
 
     model_name = "lognormal capacity"
@@ -111,9 +131,61 @@ def fit_ida(
 ) -> FragilityFit:
     """Incremental dynamic analysis: one capacity (intensity at the limit state) per record.
 
-    ``censored[i]`` marks records that did not reach the limit state; give their ``capacity``
-    as the largest intensity analysed. Returns a lognormal fragility ``(theta, beta)`` with MLE
-    and sandwich uncertainty.
+    Parameters
+    ----------
+    capacity : array_like of shape (m,)
+        Intensity at which each record reached the limit state. For a record that did not reach it,
+        give the largest intensity analysed and mark it in ``censored``.
+    censored : array_like of bool, optional
+        ``True`` for records that did not reach the limit state (right-censored).
+    cluster : array_like, optional
+        Cluster label per record; the sandwich covariance then accounts for correlation within
+        clusters.
+
+    Returns
+    -------
+    FragilityFit
+        A lognormal fragility with parameters ``theta`` (median) and ``beta`` (log-standard
+        deviation), and MLE and sandwich uncertainty.
+
+    Raises
+    ------
+    ValueError
+        For invalid capacities or if every record is censored.
+
+    See Also
+    --------
+    fit_msa : Exceedance counts instead of capacities.
+
+    Notes
+    -----
+    Discarding censored records biases the median downwards; treating their censoring intensity as
+    an observed capacity does too. The censored likelihood uses each such record only for what it
+    says: that its capacity is larger than the intensity reached.
+
+    Examples
+    --------
+    Twelve records, all reaching the limit state:
+
+    >>> import pyFragility as pf
+    >>> capacity = [0.9, 1.3, 1.1, 1.8, 0.7, 1.5, 1.2, 2.2, 1.0, 1.6, 1.4, 0.8]
+    >>> fit = pf.fit_ida(capacity)
+    >>> fit.params.round(3)
+    array([1.226, 0.325])
+
+    If the analysis stopped at an intensity of 1.5, records above it are censored:
+
+    >>> limit = 1.5
+    >>> observed = [min(c, limit) for c in capacity]
+    >>> censored = [c > limit for c in capacity]
+    >>> fit = pf.fit_ida(observed, censored)
+    >>> fit.params.round(3)
+    array([1.222, 0.324])
+
+    A likelihood-ratio interval for the median:
+
+    >>> tuple(round(v, 2) for v in fit.profile_interval("theta"))
+    (1.0, 1.55)
     """
     return fit_likelihood(LognormalCapacity(capacity, censored, cluster=cluster))
 
