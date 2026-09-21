@@ -4,98 +4,79 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/) (before 1.0, minor releases may change the API).
 
 ## [Unreleased]
+
+## [0.2.0] - 2026-09-21
+
+A rewrite of the package: from two classes for one data type to a modular library that fits
+fragility functions from any common data source and reports both model-based and
+misspecification-robust uncertainty for every fit. Documentation:
+<https://pyfragility.readthedocs.io>. If you used 0.0.1, read the
+[migration guide](https://pyfragility.readthedocs.io/en/latest/guide/migration.html).
+
 ### Added
-- **Capacity distributions.** `fit_ida(distribution=...)` fits lognormal, log-logistic, Weibull,
-  Gumbel or normal capacities, with right-censoring; all share one log-likelihood measure, so
-  `compare_models` ranks them fairly. `ParametricCapacity` is the underlying likelihood.
-- **Cloud residual distributions.** `fit_cloud(error=...)`: normal, logistic, Gumbel (min or max).
-- **`loglog` link** for binomial and ordinal models (the mirror image of `cloglog`).
+- **Data types.** `fit_msa` (multiple-stripe counts), `fit_field_data` (one 0/1 outcome per
+  structure, with cluster-robust standard errors for structures hit by the same event),
+  `fit_ida` (capacities with right-censoring), `fit_cloud` (cloud analysis, with a collapse model),
+  `fit_damage_states` / `fit_damage_states_independent` (ordered damage states), several intensity
+  measures via `fit_binomial`, and `fit_likelihood` with the `Likelihood` base class for new models.
+- **Distributions.** Probit, logit, complementary log-log and log-log links; beta-binomial
+  overdispersion; capacity distributions (`fit_ida(distribution=...)`: lognormal, log-logistic,
+  Weibull, Gumbel, normal) and cloud residual distributions (`fit_cloud(error=...)`: normal,
+  logistic, Gumbel), all comparable through `compare_models` (AIC, BIC and the
+  misspecification-robust TIC).
+- **Uncertainty and misspecification.** `cov="mle" | "expected" | "sandwich"` selects the parameter
+  covariance everywhere (`"expected"` is what R's `glm` reports); White's information-matrix test
+  with a bootstrap p-value; goodness of fit; likelihood-ratio test; bootstrap (parametric,
+  nonparametric, pairs); profile-likelihood intervals; Bayesian sampling with priors.
 - **Flexible baselines** (`pyFragility.nonparametric`): `fit_isotonic` (monotone nonparametric
-  maximum likelihood, with bootstrap bands and risk uncertainty), `fit_spline` (a B-spline GLM that
-  nests the parametric curve, so a likelihood-ratio test of the shape is valid), `curve_distance`
-  and `is_monotone`.
-- `inference.monotone_lack_of_fit_test` (parametric fit against the isotonic estimate, with a
-  parametric-bootstrap p-value), `risk.compare_risk` (mean annual frequency under several models)
-  and `plotting.plot_curves`.
-- **Documentation** (Sphinx, numpydoc, PyData theme; hosted on Read the Docs): quickstart,
-  user guide (choosing a function, uncertainty and misspecification, models, risk, extending,
-  migration), worked examples, and a complete API reference. Every public function and class has
-  a numpydoc docstring with examples; examples are run as doctests, guide pages execute their code
-  cells, and CI builds the docs with warnings as errors.
-- `pyFragility.datasets.load_msa_wood_frame()`: the paper's MSA data for eight wood-frame buildings.
-- A test that keeps the API reference in step with the public API, and one that stops dependency
-  lower bounds from being raised by accident.
-- CI: test matrix (Python 3.11-3.13; Linux, macOS, Windows), lowest-dependency job, notebook
-  execution, build/install check, weekly run against the newest and pre-release dependencies,
-  tag-triggered PyPI release workflow.
-- Tests for package metadata, public API stability, input validation and edge cases; coverage
-  threshold (90%); warnings are errors in tests.
-- `CONTRIBUTING.md`, PR and issue templates, Dependabot, pre-commit.
-
-- Covariance choice `cov="mle" | "expected" | "sandwich"` everywhere (`fit.covariance`,
-  `confidence_band`, `frequency_uncertainty`, `plot_fit`, `fragility_table`, ...). `"expected"` is
-  the inverse Fisher information, i.e. what R's `glm` reports, so R-matching results are available
-  from the new API.
-- `frequency_uncertainty(method="simulation" | "delta" | "paper")`; `"paper"` reproduces the paper's
-  Eq. 12. `mean_annual_frequency` and `probability_in_period` work for any fit.
-- `fit_damage_states_independent` for per-state (possibly crossing) fits.
-- Every public module declares `__all__`; tests fail if a public name is undeclared, undocumented
-  or removed without updating the API snapshot.
+  maximum likelihood), `fit_spline` (a spline GLM that nests the parametric curve, so a
+  likelihood-ratio test of the shape is valid), `monotone_lack_of_fit_test`, `curve_distance`,
+  `compare_risk`.
+- **Risk and loss.** `HazardCurve`, `mean_annual_frequency`,
+  `frequency_uncertainty(method="simulation" | "delta" | "paper")` (`"paper"` reproduces the paper's
+  Eq. 12), `probability_in_period`, `vulnerability`, `expected_annual_loss`.
+- **Reporting.** `plot_fit`, `plot_curves`, `fragility_table` / `fragility_json` (FEMA P-58 style
+  columns) and `pyFragility.datasets.load_msa_wood_frame()`, the paper's data.
+- **Documentation site** (quickstart, user guide, worked examples, API reference). Every public
+  function has a numpydoc docstring with examples that run as tests.
+- **Engineering.** Test matrix on Python 3.11-3.13 (Linux, macOS, Windows) plus a job with the
+  lowest supported dependencies, executed example notebooks, strict docs build, weekly run against
+  the newest dependencies, 90% coverage threshold, and a public-API snapshot test.
 
 ### Changed
-- **API review.** The top level now holds only the everyday workflow (26 names); the rest lives in
-  submodules (`pyFragility.inference`, `.bayes`, `.risk`, `.binomial`, ...). Because 0.2.0 was not
-  yet published, no deprecation period was needed for these moves.
-- Parameter names: `cov=` selects the parameter covariance (previously `kind=`);
-  `bootstrap(resample=...)` selects the resampling scheme; `fit_msa(im, num_exceed, num_gm)` and
-  `fit_binomial(im, num_exceed, num_total)` are not specific to collapse.
-- `fit_damage_states` always returns a `FragilityFit`; the independent per-state fit moved to
-  `fit_damage_states_independent` (the return type no longer depends on a flag).
-- The package version is defined once, in `pyFragility.__version__`.
-- **License changed from BSD 4-Clause to BSD 3-Clause.**
-
-### Notes
-- `fit_spline` is unpenalised: with `df >= 5` it often meets separation on real multiple-stripe
-  data (all-zero and all-one stripes) and warns; `df` of 3 or 4 converged on all of the paper's
-  buildings. Penalised splines are not included.
-
-### Fixed
-- Restored the dependency lower bounds (`numpy>=1.26`, `scipy>=1.11`, `pandas>=2.1`,
-  `statsmodels>=0.14`, `matplotlib>=3.8`). A Dependabot pull request had raised every lower bound to
-  the newest release, which would have excluded most users and emptied the "lowest supported
-  dependencies" CI job. Dependabot no longer manages Python dependencies.
-- Convergence detection no longer depends on the platform's finite-difference noise floor (the
-  beta-binomial fit was reported as non-converged on Windows and with old dependencies).
-
-### Notes
-- The paper-era "expectedHessian" option (statsmodels `cov_type="hc0", optim_hessian="eim"`) was
-  identical to the observed-Hessian sandwich; `optim_hessian` only affects the optimiser. It is
-  covered by `cov="sandwich"`.
-
-## [0.2.0] - 2026-09-20
-### Added
-- Generic likelihood engine (`Likelihood`, `FragilityFit`) with MLE and Huber-White sandwich
-  uncertainty for every model.
-- Data types: grouped binomial (MSA), field data with cluster-robust sandwich, IDA capacities with
-  censoring, cloud and modified cloud, ordered damage states, multiple intensity measures.
-- Probit, logit and complementary log-log links; beta-binomial overdispersion.
-- Inference: White information-matrix test (with bootstrap p-value), goodness of fit, AIC/BIC/TIC,
-  likelihood-ratio test, bootstrap (parametric, nonparametric, pairs), profile-likelihood
-  intervals, Bayesian sampling with priors.
-- Risk and loss: `HazardCurve`, `frequency_uncertainty`, `vulnerability`,
-  `expected_annual_loss`; `fragility_table`/`fragility_json`; `plot_fit`.
-
-### Changed
-- Modular `src/` package (Python >= 3.11), analytic score/Hessian instead of per-point sympy.
-- **The sandwich covariance is the matrix product `A^-1 B A^-1`.** 0.0.x used an elementwise
-  product (as did the paper's Appendix B); pass `legacy_elementwise_sandwich=True` to reproduce it.
+- **Python >= 3.11**; `src/` layout with `pyproject.toml`; the version is defined once, in
+  `pyFragility.__version__`. Runtime dependencies: NumPy >= 1.26, SciPy >= 1.11, pandas >= 2.1,
+  statsmodels >= 0.14, Matplotlib >= 3.8 (sympy and numdifftools are test-only).
+- **The sandwich covariance is the matrix product `A^-1 B A^-1`.** 0.0.x used the elementwise
+  product, as did the paper's Appendix B; for the paper's buildings the diagonals differ by under
+  1%. Pass `legacy_elementwise_sandwich=True` to
+  `pyFragility.variance.covariance_estimates` to reproduce the published numbers exactly.
+- Analytic score and Hessian replace per-point sympy (about 15 s to well under a second for the paper's
+  eight buildings); the optimiser starts from the GLM estimate instead of Nelder-Mead from (2, 3),
+  so estimates agree with 0.0.1 to about 1e-4.
 - `MaximumLikelihoodMethod.varCollapseRate` now samples from the GLM covariance (0.0.x ignored it).
+- **License: BSD 4-Clause to BSD 3-Clause.**
 
 ### Deprecated
-- `MaximumLikelihoodMethod` and `GLMProbitClass` (use `fit_msa`, `fit_mle`, `fit_probit_glm`).
+- `MaximumLikelihoodMethod` and `GLMProbitClass` still work but warn; use `fit_msa`,
+  `frequency_uncertainty` and friends.
 
 ### Removed
 - The sum-of-squares option of the old MLE class (it contained a bug).
 
-## [0.0.1]
+### Notes
+- The 0.0.x "`expectedHessian`" sandwich (statsmodels `cov_type="hc0", optim_hessian="eim"`) was
+  numerically identical to the observed-Hessian sandwich, because `optim_hessian` only affects the
+  optimiser; `cov="sandwich"` covers both.
+- `fit_spline` is unpenalised: with `df >= 5` it often meets separation on real multiple-stripe
+  data (all-zero and all-one stripes) and warns. `df` of 3 or 4 converged on all of the paper's
+  buildings; `fit_isotonic` has no such limit.
+- By default the risk integral runs to `int(max(im)) + 1`, as in the paper, so the hazard spline
+  extrapolates beyond the last tabulated intensity when it is not an integer; pass `im_grid=` to
+  restrict it.
+
+## [0.0.1] - 2024-06-26
 - Initial release.
+
+[Unreleased]: https://github.com/laxmandahal/pyFragility/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/laxmandahal/pyFragility/releases/tag/v0.2.0
