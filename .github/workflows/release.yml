@@ -1,9 +1,10 @@
 name: Release
 
-# Publishes to PyPI when a version tag is pushed (e.g. `git tag v0.3.0 && git push --tags`).
-# Requires a one-time PyPI "trusted publisher" setup for this repository and a GitHub
-# environment named "pypi"; see CONTRIBUTING.md. Until then this workflow fails at the
-# publish step, without side effects.
+# Publishes to PyPI when a version tag is pushed (e.g. `git tag -a v0.3.0 -m "..." && git push origin v0.3.0`).
+# The release runs the entire CI workflow first (all platforms, lowest dependencies, notebooks,
+# docs), then builds, checks and publishes. Publishing uses PyPI trusted publishing, which needs
+# a trusted publisher configured on PyPI for this repository (workflow `release.yml`,
+# environment `pypi`) and a GitHub environment named `pypi`; see CONTRIBUTING.md.
 
 on:
   push:
@@ -13,22 +14,28 @@ permissions:
   contents: read
 
 jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
   build:
+    needs: ci
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
-      - run: uv venv --python 3.13 && uv pip install build twine ".[dev]"
-      - name: Tests
-        run: uv run --no-sync pytest -m "not notebooks"
-        env:
-          MPLBACKEND: Agg
+      - run: uv venv --python 3.13 && uv pip install build twine -e .
       - name: Tag matches the package version
         run: |
           version=$(uv run --no-sync python -c "import pyFragility; print(pyFragility.__version__)")
           test "v${version}" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != v${version}"; exit 1; }
       - run: uv run --no-sync python -m build
       - run: uv run --no-sync twine check --strict dist/*
+      - name: The wheel installs and works in a clean environment
+        run: |
+          uv venv --python 3.11 /tmp/clean
+          uv pip install --python /tmp/clean/bin/python dist/*.whl
+          /tmp/clean/bin/python -c "import pyFragility as pf; ds = pf.datasets.load_msa_wood_frame(); print(pf.__version__, pf.fit_msa(ds.im, ds.counts['B2-Existing'], [45] * 16).params)"
       - uses: actions/upload-artifact@v7
         with:
           name: dist
