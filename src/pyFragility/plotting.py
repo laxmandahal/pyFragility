@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes
@@ -228,8 +231,47 @@ def plot_fit(
     return ax
 
 
+def plot_curves(
+    curves: Mapping[str, Any],
+    im_grid: ArrayLike,
+    *,
+    data: tuple[ArrayLike, ArrayLike] | None = None,
+    ax: Axes | None = None,
+) -> Axes:
+    """Overlay several fragility curves, e.g. a parametric fit and a flexible baseline.
+
+    Parameters
+    ----------
+    curves : mapping of str to fragility
+        Fitted models, isotonic fits, ``LognormalFragility`` objects or callables
+        ``im -> probability``; the keys label the curves.
+    im_grid : array_like
+        Intensities at which to draw the curves.
+    data : (array_like, array_like), optional
+        Observed intensities and exceedance fractions, drawn as markers.
+    ax : matplotlib.axes.Axes, optional
+        Axes to draw on; a new figure is created if omitted.
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+    """
+    ax = _axes(ax)
+    grid = np.asarray(im_grid, dtype=float)
+    for name, curve in curves.items():
+        ax.plot(grid, getattr(curve, "probability", curve)(grid), label=name)
+    if data is not None:
+        ax.scatter(*data, color="green", marker="s", label="Observed", zorder=3)
+    ax.set_xlabel("Intensity measure")
+    ax.set_ylabel("Probability of exceedance")
+    ax.legend()
+    ax.grid(linewidth=0.5)
+    return ax
+
+
 __all__ = [
     "plot_confidence_band",
+    "plot_curves",
     "plot_fit",
     "plot_fragility",
     "plot_parameter_distribution",

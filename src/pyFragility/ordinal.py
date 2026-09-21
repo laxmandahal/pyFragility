@@ -34,7 +34,7 @@ class OrdinalGLM(Likelihood):
         Intensity of each row.
     counts : array_like of shape (m, K + 1)
         Observations in each damage state at each row.
-    link : {"probit", "logit", "cloglog"} or Link, default "probit"
+    link : {"probit", "logit", "cloglog", "loglog"} or Link, default "probit"
         Link function.
     log_im : bool or sequence of bool, default True
         Whether each intensity enters as its logarithm.
@@ -346,7 +346,7 @@ def fit_damage_states(
         Counts of each damage state at each intensity, instead of ``damage_state``.
     n_states : int, optional
         Highest damage state ``K`` when ``damage_state`` does not contain it.
-    link : {"probit", "logit", "cloglog"} or Link, default "probit"
+    link : {"probit", "logit", "cloglog", "loglog"} or Link, default "probit"
         Link function.
     cluster : array_like, optional
         Cluster label per row.

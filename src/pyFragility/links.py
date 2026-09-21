@@ -185,7 +185,43 @@ class Cloglog(Link):
         return np.log(-np.log1p(-np.asarray(p)))
 
 
-LINKS: dict[str, Link] = {"probit": Probit(), "logit": Logit(), "cloglog": Cloglog()}
+class Loglog(Link):
+    """Log-log: ``F(eta) = exp(-exp(-eta))``, the Gumbel (largest-extreme) CDF.
+
+    The mirror image of :class:`Cloglog`: the curve rises fast and saturates slowly.
+    """
+
+    name = "loglog"
+
+    @staticmethod
+    def _t(eta):
+        return np.exp(np.clip(-np.asarray(eta, dtype=float), -700.0, 30.0))
+
+    def cdf(self, eta):
+        return np.exp(-self._t(eta))
+
+    def log_cdf(self, eta):
+        return -self._t(eta)
+
+    def log_sf(self, eta):
+        return np.log(-np.expm1(-self._t(eta)))
+
+    def log_pdf(self, eta):
+        return -np.clip(np.asarray(eta, dtype=float), -30.0, 700.0) - self._t(eta)
+
+    def dlog_pdf(self, eta):
+        return -1.0 + self._t(eta)
+
+    def ppf(self, p):
+        return -np.log(-np.log(np.asarray(p)))
+
+
+LINKS: dict[str, Link] = {
+    "probit": Probit(),
+    "logit": Logit(),
+    "cloglog": Cloglog(),
+    "loglog": Loglog(),
+}
 
 
 def get_link(link: str | Link) -> Link:
@@ -193,7 +229,7 @@ def get_link(link: str | Link) -> Link:
 
     Parameters
     ----------
-    link : {"probit", "logit", "cloglog"} or Link
+    link : {"probit", "logit", "cloglog", "loglog"} or Link
         Link name or instance.
 
     Returns
@@ -223,6 +259,7 @@ __all__ = [
     "LINKS",
     "Cloglog",
     "Link",
+    "Loglog",
     "Logit",
     "Probit",
     "get_link",

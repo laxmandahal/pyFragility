@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
 
 ## [Unreleased]
 ### Added
+- **Capacity distributions.** `fit_ida(distribution=...)` fits lognormal, log-logistic, Weibull,
+  Gumbel or normal capacities, with right-censoring; all share one log-likelihood measure, so
+  `compare_models` ranks them fairly. `ParametricCapacity` is the underlying likelihood.
+- **Cloud residual distributions.** `fit_cloud(error=...)`: normal, logistic, Gumbel (min or max).
+- **`loglog` link** for binomial and ordinal models (the mirror image of `cloglog`).
+- **Flexible baselines** (`pyFragility.nonparametric`): `fit_isotonic` (monotone nonparametric
+  maximum likelihood, with bootstrap bands and risk uncertainty), `fit_spline` (a B-spline GLM that
+  nests the parametric curve, so a likelihood-ratio test of the shape is valid), `curve_distance`
+  and `is_monotone`.
+- `inference.monotone_lack_of_fit_test` (parametric fit against the isotonic estimate, with a
+  parametric-bootstrap p-value), `risk.compare_risk` (mean annual frequency under several models)
+  and `plotting.plot_curves`.
 - **Documentation** (Sphinx, numpydoc, PyData theme; hosted on Read the Docs): quickstart,
   user guide (choosing a function, uncertainty and misspecification, models, risk, extending,
   migration), worked examples, and a complete API reference. Every public function and class has
@@ -41,6 +53,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
   `fit_damage_states_independent` (the return type no longer depends on a flag).
 - The package version is defined once, in `pyFragility.__version__`.
 - **License changed from BSD 4-Clause to BSD 3-Clause.**
+
+### Notes
+- `fit_spline` is unpenalised: with `df >= 5` it often meets separation on real multiple-stripe
+  data (all-zero and all-one stripes) and warns; `df` of 3 or 4 converged on all of the paper's
+  buildings. Penalised splines are not included.
 
 ### Fixed
 - Restored the dependency lower bounds (`numpy>=1.26`, `scipy>=1.11`, `pandas>=2.1`,

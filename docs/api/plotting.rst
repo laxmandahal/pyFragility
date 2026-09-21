@@ -11,5 +11,6 @@ Functions
    :nosignatures:
 
    plot_confidence_band
+   plot_curves
    plot_fragility
    plot_parameter_distribution

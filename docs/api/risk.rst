@@ -11,6 +11,7 @@ Functions
    :nosignatures:
 
    collapse_frequency_std
+   compare_risk
    default_im_grid
    mean_annual_collapse_frequency
    probability_of_collapse_in_years

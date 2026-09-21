@@ -20,8 +20,10 @@ Functions
    fit_damage_states_independent
    fit_field_data
    fit_ida
+   fit_isotonic
    fit_likelihood
    fit_msa
+   fit_spline
    fragility_json
    fragility_table
    frequency_uncertainty

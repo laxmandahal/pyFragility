@@ -7,9 +7,17 @@ import copy
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy import special
-from scipy.stats import norm
 
 from pyFragility.engine import FragilityFit, Likelihood, fit_likelihood, resample_indices
+from pyFragility.links import Link, get_link
+
+ERRORS = {
+    "normal": "probit",
+    "logistic": "logit",
+    "gumbel_min": "cloglog",
+    "gumbel_max": "loglog",
+}
+"""Residual distributions of the log-demand regression and their standardised CDF (link)."""
 
 
 class CloudRegression(Likelihood):
@@ -33,13 +41,17 @@ class CloudRegression(Likelihood):
         Default EDP limit-state value.
     collapse : array_like of bool, optional
         ``True`` for records that collapsed.
+    error : {"normal", "logistic", "gumbel_min", "gumbel_max"}, default "normal"
+        Distribution of the residuals ``eps`` (standardised CDF ``probit``, ``logit``, ``cloglog``
+        or ``loglog`` respectively).
     cluster : array_like, optional
         Cluster label per record.
 
     Raises
     ------
     ValueError
-        For mismatched or non-positive inputs, or fewer than four records with a usable EDP.
+        For mismatched or non-positive inputs, an unknown ``error``, or fewer than four records with
+        a usable EDP.
 
     See Also
     --------
@@ -56,8 +68,13 @@ class CloudRegression(Likelihood):
         threshold: float | None = None,
         collapse: ArrayLike | None = None,
         *,
+        error: str = "normal",
         cluster: ArrayLike | None = None,
     ) -> None:
+        if error not in ERRORS:
+            raise ValueError(f"error must be one of {sorted(ERRORS)}")
+        self.error = error
+        self._err: Link = get_link(ERRORS[error])
         self.im = np.asarray(im, dtype=float)
         self.edp = np.asarray(edp, dtype=float)
         if self.im.shape != self.edp.shape or self.im.ndim != 1:
@@ -122,10 +139,10 @@ class CloudRegression(Likelihood):
         x = np.log(self.im)
         if not self._has_collapse:
             y = np.log(self.edp)
-            return norm.logpdf((y - a - b * x) / sigma) - np.log(sigma) - y
+            return self._err.log_pdf((y - a - b * x) / sigma) - np.log(sigma) - y
         eta = params[3] + params[4] * x
         y = np.log(np.where(self.collapse, 1.0, self.edp))
-        regress = norm.logpdf((y - a - b * x) / sigma) - np.log(sigma) - y
+        regress = self._err.log_pdf((y - a - b * x) / sigma) - np.log(sigma) - y
         return np.where(self.collapse, special.log_ndtr(eta), special.log_ndtr(-eta) + regress)
 
     def _threshold(self, threshold: float | None) -> float:
@@ -136,17 +153,18 @@ class CloudRegression(Likelihood):
 
     def curve(self, params, im, threshold=None, **kwargs):
         x = np.log(np.atleast_1d(np.asarray(im, dtype=float)))
-        p_edp = special.ndtr(
-            (params[0] + params[1] * x - np.log(self._threshold(threshold))) / params[2]
-        )
+        z = (np.log(self._threshold(threshold)) - params[0] - params[1] * x) / params[2]
+        p_edp = np.exp(self._err.log_sf(z))  # P(EDP > c) = 1 - G(z)
         if not self._has_collapse:
             return p_edp
         pc = special.ndtr(params[3] + params[4] * x)
         return pc + (1 - pc) * p_edp
 
     def lognormal_transform(self, params, threshold=None, **kwargs):
-        if self._has_collapse:
-            raise NotImplementedError("the modified-cloud curve is not lognormal")
+        if self._has_collapse or self.error != "normal":
+            raise NotImplementedError(
+                "only the plain cloud with normal residuals has a lognormal (median, beta) form"
+            )
         a, b, sigma = params[:3]
         return np.array([np.exp((np.log(self._threshold(threshold)) - a) / b), sigma / b])
 
@@ -160,7 +178,8 @@ class CloudRegression(Likelihood):
             raise ValueError("kind must be 'parametric', 'nonparametric' or 'pairs'")
         new = copy.copy(self)
         x = np.log(self.im)
-        y = params[0] + params[1] * x + params[2] * rng.standard_normal(self.n_obs)
+        u = rng.uniform(1e-12, 1 - 1e-12, self.n_obs)
+        y = params[0] + params[1] * x + params[2] * self._err.ppf(u)
         new.edp = np.exp(y)
         if self._has_collapse:
             new.collapse = rng.random(self.n_obs) < special.ndtr(params[3] + params[4] * x)
@@ -173,6 +192,7 @@ def fit_cloud(
     threshold: float | None = None,
     *,
     collapse: ArrayLike | None = None,
+    error: str = "normal",
     cluster: ArrayLike | None = None,
 ) -> FragilityFit:
     """Cloud analysis of ``(im, edp)`` pairs from unscaled records.
@@ -189,19 +209,30 @@ def fit_cloud(
     collapse : array_like of bool, optional
         Flags for records that collapsed. Enables the modified cloud, which combines collapse and
         non-collapse cases.
+    error : {"normal", "logistic", "gumbel_min", "gumbel_max"}, default "normal"
+        Distribution of the residuals of ``ln EDP``. ``"normal"`` gives a lognormal fragility;
+        ``"logistic"`` has heavier tails; the Gumbel options are asymmetric (``"gumbel_min"`` has a
+        long lower tail, ``"gumbel_max"`` a long upper tail).
     cluster : array_like, optional
         Cluster label per record.
 
     Returns
     -------
     FragilityFit
-        Parameters ``a``, ``b``, ``sigma`` (plus ``gamma0``, ``gamma1`` with collapse flags). For
-        the plain cloud, :meth:`~pyFragility.FragilityFit.lognormal_parameters` gives the median
+        Parameters ``a``, ``b``, ``sigma`` (plus ``gamma0``, ``gamma1`` with collapse flags).
+        For the plain cloud with normal residuals,
+        :meth:`~pyFragility.FragilityFit.lognormal_parameters` gives the median
         ``exp((ln c - a) / b)`` and dispersion ``sigma / b`` for a threshold ``c``.
+
+    Raises
+    ------
+    ValueError
+        For an unknown ``error`` or invalid inputs.
 
     See Also
     --------
     fit_ida : Capacity data from incremental dynamic analysis.
+    pyFragility.compare_models : Compare residual distributions fitted to the same records.
 
     Examples
     --------
@@ -221,8 +252,16 @@ def fit_cloud(
     >>> summary = fit.lognormal_parameters("mle", threshold=0.05)
     >>> round(summary.theta, 3)
     2.232
+
+    Heavier-tailed residuals:
+
+    >>> logistic = pf.fit_cloud(im, edp, threshold=0.02, error="logistic")
+    >>> logistic.probability([1.0]).round(3)
+    array([0.291])
     """
-    return fit_likelihood(CloudRegression(im, edp, threshold, collapse, cluster=cluster))
+    return fit_likelihood(
+        CloudRegression(im, edp, threshold, collapse, error=error, cluster=cluster)
+    )
 
 
 __all__ = [

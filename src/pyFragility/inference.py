@@ -308,6 +308,95 @@ def likelihood_ratio_test(
     return TestResult("likelihood-ratio test", stat, dof, p / 2 if boundary else p)
 
 
+def monotone_lack_of_fit_test(
+    fit: FragilityFit, *, n_boot: int = 500, seed: int | None = 0
+) -> TestResult:
+    """Test a parametric binomial fragility against the monotone nonparametric estimate.
+
+    The statistic is ``2 (l_iso - l_param)``: how much better the *most flexible monotone*
+    curve (see :func:`pyFragility.nonparametric.fit_isotonic`) explains the counts than the
+    fitted parametric curve. It is directed at the alternative that matters for fragility
+    (a monotone curve of a different shape) and so has more power than the deviance against the
+    saturated model, which also rewards fitting noise. Because the isotonic estimate is not a
+    smooth parametric model the statistic has no simple chi-square distribution; the p-value is
+    obtained by parametric bootstrap under the fitted model.
+
+    Parameters
+    ----------
+    fit : FragilityFit
+        A binomial fit (``fit_msa``, ``fit_field_data``, ``fit_binomial``, ``fit_spline``) with a
+        single intensity measure.
+    n_boot : int, default 500
+        Number of parametric-bootstrap replications.
+    seed : int or None, default 0
+        Seed of the random number generator.
+
+    Returns
+    -------
+    TestResult
+        ``statistic`` and the bootstrap p-value ``p_value_bootstrap`` (the asymptotic
+        ``p_value`` is ``nan``).
+
+    Raises
+    ------
+    NotImplementedError
+        For models that are not plain binomial fragilities of one intensity (beta-binomial,
+        capacity, cloud, ordinal, multiple intensity measures).
+
+    See Also
+    --------
+    pyFragility.nonparametric.fit_isotonic : The nonparametric estimate.
+    pyFragility.nonparametric.fit_spline : A smooth flexible alternative with a
+        likelihood-ratio test.
+
+    Examples
+    --------
+    >>> import pyFragility as pf
+    >>> ds = pf.datasets.load_msa_wood_frame()
+    >>> fit = pf.fit_msa(ds.im, ds.counts["B2-Existing"], [ds.num_gm] * 16)
+    >>> result = pf.inference.monotone_lack_of_fit_test(fit, n_boot=100)
+    >>> round(result.statistic, 2)
+    7.5
+    >>> result.p_value_bootstrap > 0.05  # no evidence against the lognormal shape
+    True
+    """
+    from pyFragility.binomial import BetaBinomialGLM, _BinomialBase
+    from pyFragility.nonparametric import fit_isotonic
+
+    lik = fit.likelihood
+    im = np.asarray(getattr(lik, "im", None))
+    if (
+        not isinstance(lik, _BinomialBase)
+        or isinstance(lik, BetaBinomialGLM)
+        or im.ndim > 2
+        or (im.ndim == 2 and im.shape[1] != 1)
+    ):
+        raise NotImplementedError(
+            "the monotone lack-of-fit test needs a binomial fit with a single intensity measure"
+        )
+    im = im.reshape(-1)
+
+    def statistic(k, ll_param: float) -> float:
+        return 2.0 * (fit_isotonic(im, k, lik.n).log_likelihood - ll_param)
+
+    observed = statistic(lik.k, fit.loglik)
+    rng = np.random.default_rng(seed)
+    sims = []
+    for _ in range(n_boot):
+        new = lik.resample(rng, fit.params, "parametric")
+        refit = fit_likelihood(new, start=fit.params, warn=False)
+        if refit.converged:
+            sims.append(statistic(new.k, refit.loglik))
+    p_boot = float((1 + np.sum(np.asarray(sims) >= observed)) / (1 + len(sims)))
+    return TestResult(
+        "Monotone lack-of-fit test (parametric vs isotonic)",
+        observed,
+        0,
+        float("nan"),
+        p_boot,
+    )
+
+
 # ------------------------------------------------------------------------------------------
 # bootstrap
 # ------------------------------------------------------------------------------------------
@@ -556,5 +645,6 @@ __all__ = [
     "goodness_of_fit",
     "information_matrix_test",
     "likelihood_ratio_test",
+    "monotone_lack_of_fit_test",
     "profile_likelihood_interval",
 ]

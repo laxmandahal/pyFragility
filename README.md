@@ -19,9 +19,10 @@ each to collapse risk, is the approach of the paper above.
 | --- | --- | --- |
 | Exceedance counts out of `n` ground motions per intensity (MSA) | `fit_msa` | binomial: probit / logit / cloglog, optional beta-binomial |
 | One 0/1 damaged outcome per structure (field surveys), optional event clusters | `fit_field_data` | binomial GLM, cluster-robust sandwich |
-| Intensity at which each record reaches the limit state (IDA), with censoring | `fit_ida` | lognormal capacity |
-| Paired intensity / demand values (cloud analysis), optional collapse flags | `fit_cloud` | log-log regression, modified cloud |
+| Intensity at which each record reaches the limit state (IDA), with censoring | `fit_ida` | lognormal, log-logistic, Weibull, Gumbel or normal capacity |
+| Paired intensity / demand values (cloud analysis), optional collapse flags | `fit_cloud` | log-log regression with normal, logistic or Gumbel residuals; modified cloud |
 | Ordered damage states | `fit_damage_states` | cumulative-link model (non-crossing curves) or independent fits |
+| Model-free reference curves for any of the binomial data | `fit_isotonic`, `fit_spline` | monotone NPMLE; regression-spline GLM |
 | Several intensity measures | `fit_binomial(..., log_im=[True, False])` | multi-covariate GLM |
 | Published / expert median and dispersion | `LognormalFragility` | direct |
 
@@ -51,6 +52,11 @@ fit.posterior(log_prior=..., n_samples=4000)  # Bayesian, e.g. with informative 
 
 pf.compare_models({"probit": fit, "logit": pf.fit_msa(im, collapse_count, num_gm, link="logit")})
 
+# is the assumed shape adequate? compare with model-free curves
+iso = pf.fit_isotonic(im, collapse_count, num_gm)
+pf.inference.monotone_lack_of_fit_test(fit)  # parametric vs best monotone curve
+pf.risk.compare_risk({"lognormal": fit, "isotonic": iso}, hazard)
+
 # risk: mean annual frequency with parameter uncertainty, and expected annual loss
 hazard = pf.HazardCurve.from_return_periods(im_levels, return_periods)
 pf.frequency_uncertainty(fit, hazard, cov="sandwich")
@@ -68,9 +74,10 @@ the submodules:
 
 | Module | Contents |
 | --- | --- |
-| `pyFragility.inference` | `information_matrix_test`, `goodness_of_fit`, `bootstrap`, `profile_likelihood_interval`, ... |
+| `pyFragility.inference` | `information_matrix_test`, `monotone_lack_of_fit_test`, `goodness_of_fit`, `bootstrap`, `profile_likelihood_interval`, ... |
+| `pyFragility.nonparametric` | isotonic and spline baselines, `curve_distance`, `is_monotone` |
 | `pyFragility.bayes` | `sample_posterior`, `independent_priors` |
-| `pyFragility.risk` | `HazardCurve`, `mean_annual_frequency`, `frequency_uncertainty`, `vulnerability`, `expected_annual_loss` |
+| `pyFragility.risk` | `HazardCurve`, `mean_annual_frequency`, `frequency_uncertainty`, `compare_risk`, `vulnerability`, `expected_annual_loss` |
 | `pyFragility.binomial`, `.capacity`, `.cloud`, `.ordinal` | data adapters (likelihood classes) and their `fit_*` functions |
 | `pyFragility.engine` | `Likelihood` (extension point), `FragilityFit`, covariance machinery |
 | `pyFragility.links` | probit / logit / cloglog |
