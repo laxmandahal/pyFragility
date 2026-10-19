@@ -1,4 +1,4 @@
-# Probability model misspecification and parameter estimation uncertainty
+# A General-Purpose Fragility Function Fitting Package
 
 [![CI](https://github.com/laxmandahal/pyFragility/actions/workflows/ci.yml/badge.svg)](https://github.com/laxmandahal/pyFragility/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/pyFragility)](https://pypi.org/project/pyFragility/)
